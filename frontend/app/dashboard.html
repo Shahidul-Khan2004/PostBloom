@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PostBloom Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="app-body" data-page="dashboard">
+  <div class="mobile-overlay"></div>
+  <nav class="app-nav">
+    <div class="app-nav-inner">
+      <div class="app-brand">
+        <button class="sidebar-toggle" data-sidebar-toggle aria-label="Open navigation">☰</button>
+        <a class="app-logo" href="dashboard.html" aria-label="PostBloom home"></a>
+        <span class="workspace-name">Bloom Labs Creator Team</span>
+      </div>
+      <div class="app-nav-actions">
+        <button class="icon-button" aria-label="Notifications">🔔<span class="notification-badge">6</span></button>
+        <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
+        <div class="avatar-menu">
+          <button class="avatar-button" data-avatar-menu aria-label="Open user menu">AK</button>
+          <div class="dropdown-menu">
+            <a href="#">Profile</a>
+            <a href="#">Settings</a>
+            <a href="../index.html">Logout</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="app-shell">
+    <div class="app-layout">
+      <aside class="sidebar glass">
+        <div class="sidebar-nav">
+          <a class="sidebar-link active" href="dashboard.html">📊 Dashboard</a>
+          <a class="sidebar-link" href="opportunities.html">🔥 Opportunity Feed</a>
+          <a class="sidebar-link" href="campaign-new.html">🗂️ Campaigns</a>
+          <a class="sidebar-link" href="team.html">👥 Team</a>
+          <a class="sidebar-link" href="import.html">⬆️ Import Analytics</a>
+        </div>
+      </aside>
+
+      <main class="app-main">
+        <header class="page-header">
+          <div>
+            <div class="page-kicker">Manager workspace</div>
+            <h1>Dashboard</h1>
+            <p>Track campaign progress, approvals, team workload, and the latest creator workflow activity.</p>
+          </div>
+          <a class="btn btn-primary" href="import.html">Import Analytics</a>
+        </header>
+
+        <section class="metrics-grid" id="dashboardMetrics"></section>
+
+        <section class="dashboard-grid">
+          <div class="table-card glass">
+            <div class="card-header">
+              <h2>Recent Campaigns</h2>
+              <a class="btn btn-secondary" href="campaign-new.html">New Campaign</a>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Campaign</th>
+                    <th>Source Post</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="campaignRows"></tbody>
+              </table>
+            </div>
+            <div class="empty-state" id="dashboardEmpty" hidden>
+              <div class="empty-illustration">📈</div>
+              <h3>Import your LinkedIn analytics to get started</h3>
+              <p class="muted">PostBloom will find high-potential posts and turn them into campaign opportunities.</p>
+              <a class="btn btn-primary" href="import.html">Import Analytics</a>
+            </div>
+          </div>
+
+          <aside class="activity-card glass">
+            <div class="card-header">
+              <h2>Recent Activity</h2>
+            </div>
+            <div class="activity-list" id="recentActivity"></div>
+          </aside>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PostBloom </title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- NAVBAR -->
+
+  <nav>
+    <div class="container navbar">
+      <a class="logo logo-image" href="#home" aria-label="PostBloom home"></a>
+
+      <ul class="nav-links">
+        <li><a href="#home">Home</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#workflow">Workflow</a></li>
+        <li><a href="#analytics">Analytics</a></li>
+        <li><a href="#about">About</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
+        <time class="digital-clock" id="digitalClock" aria-label="Current time">--:--:--</time>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+
+  <section class="hero" id="home">
+    <div class="container hero-grid">
+
+      <div>
+        <h1>
+          The AI Operating System for Creator Teams
+        </h1>
+
+        <p>
+          Collaborate, analyze, optimize, and scale creator workflows from one intelligent workspace. PostBloom centralizes campaigns, analytics, AI insights, and creator operations into a single platform.
+        </p>
+
+        <div class="hero-buttons">
+          <a href="#" class="btn btn-primary">Start Building</a>
+          <a href="#" class="btn btn-secondary">View Demo</a>
+        </div>
+      </div>
+
+      <div class="dashboard glass">
+
+        <div class="dashboard-top">
+          <div class="metric-card">
+            <h3>Campaign Reach</h3>
+            <span>2.4M</span>
+          </div>
+
+          <div class="metric-card">
+            <h3>Engagement Growth</h3>
+            <span>+42%</span>
+          </div>
+        </div>
+
+        <div class="chart">
+          <h3>Creator Performance Analytics</h3>
+
+          <div class="bars">
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- WORKFLOW STRIP -->
+
+  <section>
+    <div class="container">
+
+      <div class="workflow-strip">
+        <div class="workflow-pill">Campaign Planning</div>
+        <div class="workflow-pill">Team Collaboration</div>
+        <div class="workflow-pill">AI Insights</div>
+        <div class="workflow-pill">Creator Analytics</div>
+        <div class="workflow-pill">Publishing Workflow</div>
+        <div class="workflow-pill">Performance Tracking</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- PROBLEMS -->
+
+  <section>
+    <div class="container">
+
+      <div class="section-title">
+        <h2>Modern Creator Teams Need Better Infrastructure</h2>
+        <p>
+          Most creator workflows are fragmented across spreadsheets, chat apps, analytics tools, and disconnected campaign systems.
+        </p>
+      </div>
+
+      <div class="grid-3">
+
+        <div class="problem-card glass">
+          <div class="icon">⚡</div>
+          <h3>Disconnected Workflows</h3>
+          <p>
+            Teams waste time switching between multiple tools with no centralized operating layer.
+          </p>
+        </div>
+
+        <div class="problem-card glass">
+          <div class="icon">📊</div>
+          <h3>Weak Analytics</h3>
+          <p>
+            Traditional creator tools fail to provide actionable growth intelligence.
+          </p>
+        </div>
+
+        <div class="problem-card glass">
+          <div class="icon">🧠</div>
+          <h3>No AI Optimization</h3>
+          <p>
+            Teams struggle to identify high-performing content opportunities at scale.
+          </p>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- WORKFLOW -->
+
+  <section id="workflow">
+    <div class="container">
+
+      <div class="section-title">
+        <h2>Built for Scalable Creator Operations</h2>
+        <p>
+          PostBloom streamlines campaign execution from planning to optimization.
+        </p>
+      </div>
+
+      <div class="workflow">
+
+        <div class="workflow-step glass">
+          <div class="step-number">1</div>
+          <h3>Plan Campaign</h3>
+        </div>
+
+        <div class="workflow-step glass">
+          <div class="step-number">2</div>
+          <h3>Collaborate</h3>
+        </div>
+
+        <div class="workflow-step glass">
+          <div class="step-number">3</div>
+          <h3>Analyze</h3>
+        </div>
+
+        <div class="workflow-step glass">
+          <div class="step-number">4</div>
+          <h3>Optimize</h3>
+        </div>
+
+        <div class="workflow-step glass">
+          <div class="step-number">5</div>
+          <h3>Scale</h3>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+
+  <section id="features">
+    <div class="container">
+
+      <div class="section-title">
+        <h2>Everything Creator Teams Need</h2>
+        <p>
+          A unified collaboration and analytics infrastructure designed for modern creator operations.
+        </p>
+      </div>
+
+      <div class="grid-3">
+
+        <div class="feature-card glass">
+          <div class="icon">🤝</div>
+          <h3>Collaboration Infrastructure</h3>
+          <p>
+            Manage workflows, approvals, campaign pipelines, and creator coordination from one workspace.
+          </p>
+        </div>
+
+        <div class="feature-card glass">
+          <div class="icon">📈</div>
+          <h3>Growth Analytics</h3>
+          <p>
+            Track engagement, virality, audience behavior, and performance metrics with real-time visibility.
+          </p>
+        </div>
+
+        <div class="feature-card glass">
+          <div class="icon">🚀</div>
+          <h3>AI Intelligence</h3>
+          <p>
+            Unlock predictive insights, optimization suggestions, and smart content recommendations.
+          </p>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ANALYTICS -->
+
+  <section id="analytics">
+    <div class="container">
+
+      <div class="section-title">
+        <h2>Data-Driven Creator Intelligence</h2>
+        <p>
+          Transform creator analytics into actionable operational decisions.
+        </p>
+      </div>
+
+      <div class="dashboard glass">
+
+        <div class="dashboard-top">
+          <div class="metric-card">
+            <h3>Virality Score</h3>
+            <span>94%</span>
+          </div>
+
+          <div class="metric-card">
+            <h3>Content Efficiency</h3>
+            <span>3.2x</span>
+          </div>
+        </div>
+
+        <div class="chart">
+          <h3>AI Growth Intelligence</h3>
+
+          <div class="bars">
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- STATS -->
+
+  <section>
+    <div class="container">
+
+      <div class="stats">
+
+        <div class="stat-card glass">
+          <h2 class="gradient-text">60%</h2>
+          <p>Faster Team Coordination</p>
+        </div>
+
+        <div class="stat-card glass">
+          <h2 class="gradient-text">45%</h2>
+          <p>Better Campaign Tracking</p>
+        </div>
+
+        <div class="stat-card glass">
+          <h2 class="gradient-text">3x</h2>
+          <p>Smarter Content Decisions</p>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- TESTIMONIAL -->
+
+  <section>
+    <div class="container">
+
+      <div class="section-title">
+        <h2>Built for Modern Creator Teams</h2>
+      </div>
+
+      <div class="testimonial-card glass">
+        <p>
+          “PostBloom transformed how our creator team manages campaigns, approvals, analytics, and publishing workflows across platforms.”
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- CTA -->
+
+  <section>
+    <div class="container">
+
+      <div class="cta glass">
+        <h2>Build the Future of Creator Operations</h2>
+
+        <p>
+          Unified workflows, AI intelligence, and scalable collaboration for modern creator teams.
+        </p>
+
+        <a href="#" class="btn btn-primary">Get Started</a>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+
+  <footer>
+    <div class="container footer">
+
+      <div>
+        <h3 class="gradient-text">PostBloom</h3>
+      </div>
+
+      <div class="footer-links">
+        <a href="#">Home</a>
+        <a href="#">Features</a>
+        <a href="#">Workflow</a>
+        <a href="#">Analytics</a>
+        <a href="#">GitHub</a>
+      </div>
+
+    </div>
+  </footer>
+
+<script>
+  const toggle = document.getElementById('themeToggle');
+  const html = document.documentElement;
+  const stored = localStorage.getItem('theme');
+
+  if (stored === 'light') {
+    html.setAttribute('data-theme', 'light');
+    toggle.textContent = '☀️';
+  }
+
+  toggle.addEventListener('click', () => {
+    const isLight = html.getAttribute('data-theme') === 'light';
+    if (isLight) {
+      html.removeAttribute('data-theme');
+      toggle.textContent = '🌙';
+      localStorage.setItem('theme', 'dark');
+    } else {
+      html.setAttribute('data-theme', 'light');
+      toggle.textContent = '☀️';
+      localStorage.setItem('theme', 'light');
+    }
+  });
+
+  const clock = document.getElementById('digitalClock');
+
+  function updateClock() {
+    const now = new Date();
+    clock.textContent = now.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    clock.setAttribute('datetime', now.toISOString());
+  }
+
+  updateClock();
+  setInterval(updateClock, 1000);
+</script>
+
+</body>
+</html>

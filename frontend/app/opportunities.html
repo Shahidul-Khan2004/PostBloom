@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PostBloom Opportunity Feed</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="app-body" data-page="opportunities">
+  <div class="mobile-overlay"></div>
+  <nav class="app-nav">
+    <div class="app-nav-inner">
+      <div class="app-brand">
+        <button class="sidebar-toggle" data-sidebar-toggle aria-label="Open navigation">☰</button>
+        <a class="app-logo" href="dashboard.html" aria-label="PostBloom home"></a>
+        <span class="workspace-name">Bloom Labs Creator Team</span>
+      </div>
+      <div class="app-nav-actions">
+        <button class="icon-button" aria-label="Notifications">🔔<span class="notification-badge">6</span></button>
+        <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
+        <div class="avatar-menu">
+          <button class="avatar-button" data-avatar-menu aria-label="Open user menu">AK</button>
+          <div class="dropdown-menu">
+            <a href="#">Profile</a>
+            <a href="#">Settings</a>
+            <a href="../index.html">Logout</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="app-shell">
+    <div class="app-layout">
+      <aside class="sidebar glass">
+        <div class="sidebar-nav">
+          <a class="sidebar-link" href="dashboard.html">📊 Dashboard</a>
+          <a class="sidebar-link active" href="opportunities.html">🔥 Opportunity Feed</a>
+          <a class="sidebar-link" href="campaign-new.html">🗂️ Campaigns</a>
+          <a class="sidebar-link" href="team.html">👥 Team</a>
+          <a class="sidebar-link" href="import.html">⬆️ Import Analytics</a>
+        </div>
+      </aside>
+
+      <main class="app-main">
+        <header class="page-header">
+          <div>
+            <div class="page-kicker">LinkedIn analytics powered</div>
+            <h1>Opportunity Feed</h1>
+            <p>Prioritized source posts that are strong candidates for campaign expansion.</p>
+          </div>
+          <a class="btn btn-secondary" href="import.html">Import Analytics</a>
+        </header>
+
+        <section class="filter-bar glass">
+          <div class="field">
+            <label for="sortOpportunities">Sort by</label>
+            <select id="sortOpportunities">
+              <option value="score">Top Score</option>
+              <option value="recent">Most Recent</option>
+              <option value="impressions">Most Impressions</option>
+              <option value="engagement">Highest Engagement</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="dateFrom">Date from</label>
+            <input id="dateFrom" type="text" value="May 1, 2026">
+          </div>
+          <div class="field">
+            <label for="dateTo">Date to</label>
+            <input id="dateTo" type="text" value="May 25, 2026">
+          </div>
+        </section>
+
+        <div class="empty-state glass" id="opportunitiesEmpty" hidden>
+          <div class="empty-illustration">⬆️</div>
+          <h3>No analytics import yet</h3>
+          <p class="muted">Import your LinkedIn spreadsheet to generate scored content opportunities.</p>
+          <a class="btn btn-primary" href="import.html">Import Analytics</a>
+        </div>
+
+        <section class="opportunity-grid" id="opportunityGrid"></section>
+      </main>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
