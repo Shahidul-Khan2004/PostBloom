@@ -316,6 +316,134 @@ function renderComments(comments) {
   return comments.map(renderComment).join('');
 }
 
+const API_BASE = 'http://localhost:3000';
+
+function getSession() {
+  try {
+    return JSON.parse(localStorage.getItem('postbloomSession') || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function saveSession(nextSession) {
+  const session = { ...getSession(), ...nextSession };
+  localStorage.setItem('postbloomSession', JSON.stringify(session));
+  return session;
+}
+
+function getStoredProfile() {
+  try {
+    return JSON.parse(localStorage.getItem('postbloomProfile') || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function saveStoredProfile(nextProfile) {
+  const profile = { ...getStoredProfile(), ...nextProfile };
+  localStorage.setItem('postbloomProfile', JSON.stringify(profile));
+  return profile;
+}
+
+function getProfileIdentity() {
+  const session = getSession();
+  const user = session.user || {};
+  const stored = getStoredProfile();
+  const name = user.displayName || user.name || 'Avery Khan';
+  const email = user.email || 'avery@postbloom.co';
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join('') || 'AK';
+
+  return {
+    name,
+    email,
+    initials,
+    phone: stored.phone || '',
+    photo: stored.photo || ''
+  };
+}
+
+function paintAvatar(node, profile) {
+  if (!node) return;
+  if (profile.photo) {
+    node.textContent = '';
+    node.classList.add('has-image');
+    node.style.backgroundImage = `url("${profile.photo}")`;
+  } else {
+    node.textContent = profile.initials;
+    node.classList.remove('has-image');
+    node.style.backgroundImage = '';
+  }
+}
+
+function updateShellProfile() {
+  const profile = getProfileIdentity();
+  document.querySelectorAll('.avatar-button').forEach((button) => paintAvatar(button, profile));
+}
+
+function readProfileImage(file) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    image.addEventListener('load', () => {
+      const size = 320;
+      const scale = Math.min(size / image.width, size / image.height, 1);
+      const width = Math.max(1, Math.round(image.width * scale));
+      const height = Math.max(1, Math.round(image.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+      context.drawImage(image, 0, 0, width, height);
+      URL.revokeObjectURL(objectUrl);
+      resolve(canvas.toDataURL('image/jpeg', 0.86));
+    });
+
+    image.addEventListener('error', () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Could not read that image.'));
+    });
+
+    image.src = objectUrl;
+  });
+}
+
+async function apiRequest(path, { method = 'GET', body, token, headers = {} } = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: {
+      ...(body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...headers
+    },
+    body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined
+  });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = payload.error?.message || `Request failed with status ${res.status}`;
+    throw new Error(message);
+  }
+  return payload.data;
+}
+
+function showInlineError(node, message) {
+  if (!node) return;
+  node.textContent = message;
+  node.classList.add('is-visible');
+}
+
+function hideInlineError(node) {
+  if (!node) return;
+  node.textContent = '';
+  node.classList.remove('is-visible');
+}
+
 function initTheme() {
   const toggle = document.getElementById('themeToggle');
   const html = document.documentElement;
@@ -349,6 +477,8 @@ function initShell() {
   const sidebar = document.querySelector('.sidebar');
   const overlay = document.querySelector('.mobile-overlay');
 
+  updateShellProfile();
+
   if (avatarButton && dropdown) {
     avatarButton.addEventListener('click', () => dropdown.classList.toggle('is-open'));
     document.addEventListener('click', (event) => {
@@ -364,6 +494,663 @@ function initShell() {
     sidebarToggle.addEventListener('click', toggleSidebar);
     overlay.addEventListener('click', toggleSidebar);
   }
+}
+
+function initProfile() {
+  const form = document.getElementById('profileForm');
+  const photoInput = document.getElementById('profilePhotoInput');
+  const photoPreview = document.getElementById('profilePhotoPreview');
+  const phoneInput = document.getElementById('profilePhone');
+  const status = document.getElementById('profileSaveStatus');
+  const nameNode = document.getElementById('profileName');
+  const emailNode = document.getElementById('profileEmail');
+  const profile = getProfileIdentity();
+
+  if (nameNode) nameNode.textContent = profile.name;
+  if (emailNode) emailNode.textContent = profile.email;
+  if (phoneInput) phoneInput.value = profile.phone;
+  paintAvatar(photoPreview, profile);
+
+  if (photoInput) {
+    photoInput.addEventListener('change', async () => {
+      const file = photoInput.files && photoInput.files[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) {
+        if (status) status.textContent = 'Please choose an image file.';
+        photoInput.value = '';
+        return;
+      }
+
+      try {
+        const photo = await readProfileImage(file);
+        const updated = saveStoredProfile({ photo });
+        paintAvatar(photoPreview, { ...profile, ...updated });
+        updateShellProfile();
+        if (status) status.textContent = 'Profile picture saved.';
+      } catch (err) {
+        if (status) status.textContent = err.message;
+      }
+    });
+  }
+
+  if (form) {
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const phone = phoneInput ? phoneInput.value.trim() : '';
+      saveStoredProfile({ phone });
+      if (status) status.textContent = phone ? 'Phone number saved.' : 'Phone number cleared.';
+    });
+  }
+}
+
+function initAuth() {
+  const form = document.getElementById('authForm');
+  const submit = document.getElementById('authSubmit');
+  const error = document.getElementById('authError');
+  const kicker = document.getElementById('authKicker');
+  const heading = document.getElementById('authHeading');
+  const modeText = document.getElementById('authModeText');
+  const modeButtons = document.querySelectorAll('[data-auth-mode]');
+  const registerFields = document.querySelectorAll('[data-register-only]');
+  let mode = 'login';
+
+  if (!form) return;
+
+  function setMode(nextMode) {
+    mode = nextMode;
+    modeButtons.forEach((button) => {
+      button.classList.toggle('active', button.dataset.authMode === mode);
+    });
+    registerFields.forEach((field) => {
+      field.hidden = mode !== 'register';
+    });
+    document.getElementById('displayName')?.toggleAttribute('required', mode === 'register');
+    document.getElementById('password')?.setAttribute(
+      'autocomplete',
+      mode === 'register' ? 'new-password' : 'current-password'
+    );
+    document.body.classList.toggle('register-mode', mode === 'register');
+    document.body.classList.toggle('login-mode', mode === 'login');
+    submit.textContent = mode === 'register' ? 'Create Account' : 'Login';
+    if (kicker) kicker.textContent = mode === 'register' ? 'New workspace' : 'Welcome back';
+    if (heading) heading.textContent = mode === 'register' ? 'Create your account' : 'Access PostBloom';
+    if (modeText) {
+      modeText.textContent = mode === 'register'
+        ? 'Create your account to continue to the guided setup.'
+        : 'Continue to your workspace and pick up your campaign workflow.';
+    }
+    hideInlineError(error);
+  }
+
+  modeButtons.forEach((button) => {
+    button.addEventListener('click', () => setMode(button.dataset.authMode));
+  });
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    hideInlineError(error);
+    submit.disabled = true;
+    submit.textContent = mode === 'register' ? 'Creating account...' : 'Logging in...';
+
+    const formData = new FormData(form);
+    const body = {
+      email: String(formData.get('email') || '').trim(),
+      password: String(formData.get('password') || '')
+    };
+    if (mode === 'register') {
+      body.displayName = String(formData.get('displayName') || '').trim();
+    }
+
+    try {
+      const data = await apiRequest(`/api/v1/auth/${mode}`, { method: 'POST', body });
+      saveSession({ token: data.token, user: data.user });
+      window.location.href = 'workspace-new.html';
+    } catch (err) {
+      showInlineError(error, `${err.message}. Make sure the backend is running at ${API_BASE}.`);
+    } finally {
+      submit.disabled = false;
+      submit.textContent = mode === 'register' ? 'Create Account' : 'Login';
+    }
+  });
+
+  setMode('login');
+}
+
+function initTutorial() {
+  const image = document.getElementById('tutorialImage');
+  const title = document.getElementById('tutorialTitle');
+  const text = document.getElementById('tutorialText');
+  const step = document.getElementById('tutorialStep');
+  const prev = document.getElementById('tutorialPrev');
+  const next = document.getElementById('tutorialNext');
+  const dots = document.getElementById('tutorialDots');
+
+  if (!image || !title || !text || !step || !prev || !next || !dots) return;
+
+  const slides = [
+    {
+      title: 'Understand your workspace',
+      text: 'Your workspace keeps the creator team, imports, campaigns, and approvals in one shared place.',
+      image: 'assets/ss1.png'
+    },
+    {
+      title: 'Import creator analytics',
+      text: 'Start with your LinkedIn analytics export so PostBloom can find posts worth expanding.',
+      image: 'assets/ss2.png'
+    },
+    {
+      title: 'Review opportunity scores',
+      text: 'The opportunity feed ranks posts by reach and engagement signals so the strongest ideas rise first.',
+      image: 'assets/ss3.png'
+    },
+    {
+      title: 'Build campaign deliverables',
+      text: 'Turn one winning post into platform-ready deliverables for writers, designers, and reviewers.',
+      image: 'assets/ss4.png'
+    },
+    {
+      title: 'Track review and export',
+      text: 'Use the workflow to submit, review, approve, and prepare campaign assets for publishing.',
+      image: 'assets/ss5.png'
+    }
+  ];
+  let index = 0;
+
+  dots.innerHTML = slides.map((_, dotIndex) => (
+    `<button class="tutorial-dot" type="button" data-tutorial-dot="${dotIndex}" aria-label="Go to step ${dotIndex + 1}"></button>`
+  )).join('');
+
+  function draw() {
+    const slide = slides[index];
+    image.src = slide.image;
+    title.textContent = slide.title;
+    text.textContent = slide.text;
+    step.textContent = `Step ${index + 1} of ${slides.length}`;
+    prev.disabled = index === 0;
+    next.textContent = index === slides.length - 1 ? 'I Understand' : 'Next';
+    document.querySelectorAll('[data-tutorial-dot]').forEach((dot) => {
+      dot.classList.toggle('active', Number(dot.dataset.tutorialDot) === index);
+    });
+  }
+
+  prev.addEventListener('click', () => {
+    index = Math.max(0, index - 1);
+    draw();
+  });
+
+  next.addEventListener('click', () => {
+    if (index === slides.length - 1) {
+      localStorage.setItem('postbloomTutorialDone', 'true');
+      window.location.href = 'analyze.html';
+      return;
+    }
+    index += 1;
+    draw();
+  });
+
+  document.querySelectorAll('[data-tutorial-dot]').forEach((dot) => {
+    dot.addEventListener('click', () => {
+      index = Number(dot.dataset.tutorialDot);
+      draw();
+    });
+  });
+
+  draw();
+}
+
+function slugify(value) {
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function getSavedWorkspaces() {
+  const session = getSession();
+  let saved = [];
+  try {
+    saved = JSON.parse(localStorage.getItem('postbloomWorkspaces') || '[]');
+  } catch {
+    saved = [];
+  }
+
+  if (session.workspace?.name || session.workspace?.slug) {
+    saved.push(session.workspace);
+  }
+
+  return saved.filter((workspace) => workspace && (workspace.name || workspace.slug));
+}
+
+function rememberWorkspace(workspace) {
+  if (!workspace) return;
+  const workspaces = getSavedWorkspaces();
+  const nextSlug = workspace.slug || slugify(workspace.name || '');
+  const nextWorkspace = { name: workspace.name, slug: nextSlug, publicUuid: workspace.publicUuid };
+  const next = [
+    ...workspaces.filter((item) => (item.slug || slugify(item.name || '')) !== nextSlug),
+    nextWorkspace
+  ];
+  localStorage.setItem('postbloomWorkspaces', JSON.stringify(next));
+}
+
+function initWorkspaceNew() {
+  const form = document.getElementById('workspaceForm');
+  const name = document.getElementById('workspaceName');
+  const slug = document.getElementById('workspaceSlug');
+  const error = document.getElementById('workspaceError');
+  let allowDuplicateName = false;
+
+  if (!form || !name) return;
+
+  name.addEventListener('input', () => {
+    allowDuplicateName = false;
+    hideInlineError(error);
+    const button = form.querySelector('button[type="submit"]');
+    if (button) button.textContent = 'Create Workspace & Start Tutorial';
+  });
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    hideInlineError(error);
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    button.textContent = 'Creating...';
+
+    const session = getSession();
+    const body = {
+      name: name.value.trim(),
+      slug: slug ? slug.value.trim() || slugify(name.value) : slugify(name.value)
+    };
+    const duplicate = getSavedWorkspaces().find((workspace) => {
+      const workspaceSlug = workspace.slug || slugify(workspace.name || '');
+      return workspaceSlug === body.slug || String(workspace.name || '').trim().toLowerCase() === body.name.toLowerCase();
+    });
+
+    if (duplicate && !allowDuplicateName) {
+      showInlineError(
+        error,
+        `A workspace named "${duplicate.name || body.name}" already exists. Press the button again to replace the old workspace with this new one.`
+      );
+      allowDuplicateName = true;
+      button.disabled = false;
+      button.textContent = 'Replace Workspace & Start Tutorial';
+      return;
+    }
+
+    try {
+      if (session.token) {
+        const workspace = await apiRequest('/api/v1/workspaces', {
+          method: 'POST',
+          token: session.token,
+          body
+        });
+        saveSession({ workspace });
+        rememberWorkspace(workspace);
+      } else {
+        const workspace = {
+          publicUuid: `local-${Date.now()}`,
+          name: body.name,
+          slug: body.slug
+        };
+        saveSession({ workspace });
+        rememberWorkspace(workspace);
+      }
+      window.location.href = 'tutorial.html';
+    } catch (err) {
+      showInlineError(error, `${err.message}. Continuing with a local workspace.`);
+      const workspace = {
+        publicUuid: `local-${Date.now()}`,
+        name: body.name,
+        slug: body.slug
+      };
+      saveSession({ workspace });
+      rememberWorkspace(workspace);
+      window.setTimeout(() => {
+        window.location.href = 'tutorial.html';
+      }, 1100);
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Create Workspace & Start Tutorial';
+    }
+  });
+}
+
+function splitCsvLine(line) {
+  const cells = [];
+  let cell = '';
+  let quoted = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    const next = line[i + 1];
+    if (char === '"' && quoted && next === '"') {
+      cell += '"';
+      i += 1;
+    } else if (char === '"') {
+      quoted = !quoted;
+    } else if (char === ',' && !quoted) {
+      cells.push(cell.trim());
+      cell = '';
+    } else {
+      cell += char;
+    }
+  }
+  cells.push(cell.trim());
+  return cells;
+}
+
+function parseCsv(text) {
+  const lines = text.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  if (lines.length < 2) return [];
+  const headers = splitCsvLine(lines[0]).map((header) => header.toLowerCase().trim());
+  return lines.slice(1).map((line) => {
+    const values = splitCsvLine(line);
+    return headers.reduce((row, header, index) => {
+      row[header] = values[index] || '';
+      return row;
+    }, {});
+  });
+}
+
+function normalizeHeader(value) {
+  return String(value)
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function columnIndexFromRef(ref) {
+  const letters = String(ref).match(/[A-Z]+/i)?.[0] || 'A';
+  return letters.toUpperCase().split('').reduce((total, char) => (total * 26) + char.charCodeAt(0) - 64, 0) - 1;
+}
+
+async function inflateZipBytes(bytes, method) {
+  if (method === 0) return bytes;
+  if (method !== 8 || typeof DecompressionStream === 'undefined') {
+    throw new Error('This browser cannot read this compressed XLSX file locally. Export it as CSV and try again.');
+  }
+
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+function findZipEntries(buffer) {
+  const view = new DataView(buffer);
+  const decoder = new TextDecoder();
+  let eocdOffset = -1;
+
+  for (let offset = view.byteLength - 22; offset >= 0; offset -= 1) {
+    if (view.getUint32(offset, true) === 0x06054b50) {
+      eocdOffset = offset;
+      break;
+    }
+  }
+
+  if (eocdOffset === -1) throw new Error('Could not read the XLSX file.');
+
+  const entryCount = view.getUint16(eocdOffset + 10, true);
+  let directoryOffset = view.getUint32(eocdOffset + 16, true);
+  const entries = new Map();
+
+  for (let index = 0; index < entryCount; index += 1) {
+    if (view.getUint32(directoryOffset, true) !== 0x02014b50) break;
+    const method = view.getUint16(directoryOffset + 10, true);
+    const compressedSize = view.getUint32(directoryOffset + 20, true);
+    const nameLength = view.getUint16(directoryOffset + 28, true);
+    const extraLength = view.getUint16(directoryOffset + 30, true);
+    const commentLength = view.getUint16(directoryOffset + 32, true);
+    const localOffset = view.getUint32(directoryOffset + 42, true);
+    const name = decoder.decode(new Uint8Array(buffer, directoryOffset + 46, nameLength));
+    const localNameLength = view.getUint16(localOffset + 26, true);
+    const localExtraLength = view.getUint16(localOffset + 28, true);
+    const dataOffset = localOffset + 30 + localNameLength + localExtraLength;
+    entries.set(name, {
+      method,
+      bytes: new Uint8Array(buffer, dataOffset, compressedSize)
+    });
+    directoryOffset += 46 + nameLength + extraLength + commentLength;
+  }
+
+  return entries;
+}
+
+async function readZipText(entries, name) {
+  const entry = entries.get(name);
+  if (!entry) return '';
+  const inflated = await inflateZipBytes(entry.bytes, entry.method);
+  return new TextDecoder().decode(inflated);
+}
+
+async function parseXlsx(file) {
+  const entries = findZipEntries(await file.arrayBuffer());
+  const sharedXml = await readZipText(entries, 'xl/sharedStrings.xml');
+  const sharedStrings = [];
+
+  if (sharedXml) {
+    const sharedDoc = new DOMParser().parseFromString(sharedXml, 'application/xml');
+    sharedDoc.querySelectorAll('si').forEach((item) => {
+      sharedStrings.push([...item.querySelectorAll('t')].map((node) => node.textContent || '').join(''));
+    });
+  }
+
+  const sheetName = [...entries.keys()].find((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name));
+  if (!sheetName) throw new Error('No worksheet found in this XLSX file.');
+  const sheetXml = await readZipText(entries, sheetName);
+  const sheetDoc = new DOMParser().parseFromString(sheetXml, 'application/xml');
+  const table = [];
+
+  sheetDoc.querySelectorAll('sheetData row').forEach((rowNode) => {
+    const row = [];
+    rowNode.querySelectorAll('c').forEach((cell) => {
+      const column = columnIndexFromRef(cell.getAttribute('r'));
+      const type = cell.getAttribute('t');
+      let value = '';
+      if (type === 's') {
+        value = sharedStrings[Number(cell.querySelector('v')?.textContent || 0)] || '';
+      } else if (type === 'inlineStr') {
+        value = cell.querySelector('is t')?.textContent || '';
+      } else {
+        value = cell.querySelector('v')?.textContent || '';
+      }
+      row[column] = value;
+    });
+    if (row.some((value) => String(value || '').trim())) table.push(row);
+  });
+
+  const headerSignals = ['date', 'post date', 'impressions', 'views', 'reach', 'reactions', 'likes', 'comments', 'reposts', 'shares', 'text', 'content'];
+  const headerIndex = table.findIndex((row) => row.some((cell) => headerSignals.includes(normalizeHeader(cell))));
+  const headers = (table[headerIndex >= 0 ? headerIndex : 0] || []).map(normalizeHeader);
+  return table.slice((headerIndex >= 0 ? headerIndex : 0) + 1).map((row) => (
+    headers.reduce((record, header, index) => {
+      if (header) record[header] = row[index] || '';
+      return record;
+    }, {})
+  )).filter((row) => Object.values(row).some((value) => String(value || '').trim()));
+}
+
+function numberFromRow(row, keys) {
+  const key = keys.find((item) => row[normalizeHeader(item)] != null && row[normalizeHeader(item)] !== '');
+  if (!key) return 0;
+  return Number(String(row[normalizeHeader(key)]).replace(/[^0-9.-]/g, '')) || 0;
+}
+
+function textFromRow(row, keys, fallback = '') {
+  const key = keys.find((item) => row[normalizeHeader(item)] != null && String(row[normalizeHeader(item)]).trim() !== '');
+  return key ? String(row[normalizeHeader(key)]).trim() : fallback;
+}
+
+function formatAnalysisDate(value) {
+  if (!value) return 'No date';
+  if (/^\d+(\.\d+)?$/.test(String(value))) {
+    const serial = Number(value);
+    if (serial > 20000) {
+      const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+      excelEpoch.setUTCDate(excelEpoch.getUTCDate() + serial);
+      return excelEpoch.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function recommendationForScore(score) {
+  if (score >= 80) return { label: 'Prioritize', className: 'recommendation-high' };
+  if (score >= 60) return { label: 'Strong Fit', className: 'recommendation-good' };
+  if (score >= 40) return { label: 'Review', className: 'recommendation-mid' };
+  return { label: 'Low Priority', className: 'recommendation-low' };
+}
+
+function previewDomain(url) {
+  if (!url) return 'www.linkedin.com';
+  try {
+    return new URL(url.startsWith('http') ? url : `https://${url}`).hostname.replace(/^m\./, 'www.');
+  } catch {
+    return String(url).replace(/^https?:\/\//, '').split('/')[0] || 'www.linkedin.com';
+  }
+}
+
+function buildCsvAnalysis(rows) {
+  const analyzed = rows.map((row, index) => {
+    const reach = numberFromRow(row, ['reach', 'impressions', 'views', 'total reach', 'total impressions', 'total views']);
+    const reactions = numberFromRow(row, ['reactions', 'likes', 'total reactions', 'total likes']);
+    const comments = numberFromRow(row, ['comments']);
+    const reposts = numberFromRow(row, ['reposts', 'shares', 'reshares']);
+    const engagements = reactions + comments + reposts;
+    const score = Math.min(100, Math.round((Math.log10(reach + 1) * 12) + (engagements / Math.max(reach, 1) * 180)));
+    const preview = textFromRow(row, ['text', 'post', 'post text', 'content', 'caption', 'copy', 'share commentary', 'title'], `Imported post ${index + 1}`);
+    const url = textFromRow(row, ['url', 'post url', 'linkedinposturl', 'linkedin post url', 'link']);
+    const image = textFromRow(row, ['image', 'image url', 'thumbnail', 'thumbnail url', 'media', 'media url', 'photo']);
+    const date = textFromRow(row, ['date', 'post date', 'created', 'created at', 'published at']);
+    return { preview, url, image, date, reach, engagements, score };
+  }).sort((a, b) => b.score - a.score);
+
+  const totals = analyzed.reduce((sum, row) => ({
+    impressions: sum.impressions + row.reach,
+    engagements: sum.engagements + row.engagements
+  }), { impressions: 0, engagements: 0 });
+
+  return {
+    rowCount: analyzed.length,
+    topScore: analyzed[0]?.score || 0,
+    impressions: totals.impressions,
+    engagements: totals.engagements,
+    rows: analyzed.slice(0, 8)
+  };
+}
+
+function renderAnalysis(analysis) {
+  const results = document.getElementById('analysisResults');
+  const metrics = document.getElementById('analysisMetrics');
+  const rows = document.getElementById('analysisRows');
+
+  if (!results || !metrics || !rows) return;
+
+  metrics.innerHTML = [
+    ['Rows Analyzed', analysis.rowCount],
+    ['Total Impressions', formatNumber(analysis.impressions)],
+    ['Total Engagements', formatNumber(analysis.engagements)],
+    ['Best Score', analysis.topScore]
+  ].map(([label, value]) => `
+    <article class="metric-panel glass">
+      <div class="metric-label">${label}</div>
+      <div class="metric-value">${value}</div>
+    </article>
+  `).join('');
+
+  rows.innerHTML = analysis.rows.map((row, index) => {
+    const recommendation = recommendationForScore(row.score);
+    const preview = row.preview || 'LinkedIn post preview';
+    const domain = previewDomain(row.url);
+    return `
+    <tr>
+      <td><span class="rank-badge">#${index + 1}</span></td>
+      <td>
+        <div class="analysis-preview-card">
+          ${row.image ? `<img class="analysis-preview-image" src="${escapeHtml(row.image)}" alt="">` : '<div class="analysis-preview-image analysis-preview-placeholder">LinkedIn</div>'}
+          <div class="analysis-preview-body">
+            <strong>${escapeHtml(preview)}</strong>
+            <span>${escapeHtml(domain)}</span>
+          </div>
+        </div>
+      </td>
+      <td>${escapeHtml(formatAnalysisDate(row.date))}</td>
+      <td><strong>${formatNumber(row.reach || row.impressions || 0)}</strong></td>
+      <td>${scoreBadge(row.score)}</td>
+      <td><span class="recommendation-badge ${recommendation.className}">${recommendation.label}</span></td>
+    </tr>
+  `;
+  }).join('');
+
+  localStorage.setItem('postbloomImportDone', 'true');
+  results.hidden = false;
+}
+
+function initAnalyze() {
+  const dropzone = document.getElementById('analysisDropzone');
+  const input = document.getElementById('analysisFile');
+  const fileSummary = document.getElementById('analysisFileSummary');
+  const fileName = document.getElementById('analysisFileName');
+  const fileSize = document.getElementById('analysisFileSize');
+  const error = document.getElementById('analysisError');
+  const generate = document.getElementById('generateAnalysis');
+  let currentFile = null;
+
+  if (!dropzone || !input || !generate) return;
+
+  function handleFile(file) {
+    currentFile = file;
+    hideInlineError(error);
+    if (!file || (!file.name.endsWith('.csv') && !file.name.endsWith('.xlsx'))) {
+      currentFile = null;
+      fileSummary.classList.remove('is-visible');
+      showInlineError(error, 'Upload a .csv file for instant analysis or a .xlsx LinkedIn export for backend import.');
+      return;
+    }
+    fileName.textContent = file.name;
+    fileSize.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
+    fileSummary.classList.add('is-visible');
+  }
+
+  dropzone.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => handleFile(input.files[0]));
+  dropzone.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    dropzone.classList.add('is-dragover');
+  });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('is-dragover'));
+  dropzone.addEventListener('drop', (event) => {
+    event.preventDefault();
+    dropzone.classList.remove('is-dragover');
+    handleFile(event.dataTransfer.files[0]);
+  });
+
+  generate.addEventListener('click', async () => {
+    if (!currentFile) return;
+    hideInlineError(error);
+    generate.disabled = true;
+    generate.textContent = 'Generating...';
+
+    try {
+      if (currentFile.name.endsWith('.csv')) {
+        const text = await currentFile.text();
+        const rows = parseCsv(text);
+        if (rows.length === 0) throw new Error('The CSV needs a header row and at least one data row.');
+        renderAnalysis(buildCsvAnalysis(rows));
+      } else {
+        const rows = await parseXlsx(currentFile);
+        if (rows.length === 0) throw new Error('The XLSX needs a header row and at least one data row.');
+        renderAnalysis(buildCsvAnalysis(rows));
+      }
+    } catch (err) {
+      showInlineError(error, err.message);
+    } finally {
+      generate.disabled = false;
+      generate.textContent = 'Generate';
+    }
+  });
 }
 
 function renderDashboard() {
@@ -445,25 +1232,39 @@ function renderOpportunities() {
       return;
     }
     if (empty) empty.hidden = true;
-    grid.innerHTML = orderedItems().map((item) => `
-      <article class="opportunity-card glass">
+    grid.innerHTML = orderedItems().map((item, index) => {
+      const engagement = item.reactions + item.comments + item.reposts;
+      const engagementRate = ((engagement / item.impressions) * 100).toFixed(1);
+      const needsEnrichment = item.snippet.startsWith('[No text');
+
+      return `
+      <article class="opportunity-card glass ${index === 0 ? 'opportunity-card-featured' : ''}">
+        <div class="opportunity-card-glow"></div>
         <div class="opportunity-top">
-          ${scoreBadge(item.score)}
-          <span class="muted">${item.date}</span>
+          <div class="opportunity-rank">
+            <span>#${index + 1}</span>
+            <strong>${scoreBadge(item.score)}</strong>
+          </div>
+          <span class="opportunity-date">${item.date}</span>
         </div>
-        <h3>High performer · Strong candidate for expansion</h3>
+        <div class="opportunity-title-row">
+          <h3>${needsEnrichment ? 'Enrichment-ready source post' : 'High performer for campaign expansion'}</h3>
+          <span class="opportunity-status">${needsEnrichment ? 'Needs text' : 'Ready'}</span>
+        </div>
         <div class="opportunity-stats">
           <div class="mini-stat"><span>Impressions</span><strong>${formatNumber(item.impressions)}</strong></div>
           <div class="mini-stat"><span>Reactions</span><strong>${formatNumber(item.reactions)}</strong></div>
           <div class="mini-stat"><span>Comments</span><strong>${formatNumber(item.comments)}</strong></div>
-          <div class="mini-stat"><span>Reposts</span><strong>${formatNumber(item.reposts)}</strong></div>
+          <div class="mini-stat"><span>Eng. Rate</span><strong>${engagementRate}%</strong></div>
         </div>
-        <p>${item.snippet}</p>
+        <p class="opportunity-snippet">${escapeHtml(item.snippet)}</p>
         <div class="action-row">
-          <a class="btn btn-primary" href="enrich.html?opportunity=${item.id}">Create Campaign →</a>
+          <a class="btn btn-primary" href="enrich.html?opportunity=${item.id}">${needsEnrichment ? 'Enrich Source' : 'Create Campaign'} →</a>
+          <span class="opportunity-meta">${formatNumber(engagement)} total engagements</span>
         </div>
       </article>
-    `).join('');
+    `;
+    }).join('');
   }
 
   if (sort) sort.addEventListener('change', draw);
@@ -749,6 +1550,10 @@ document.addEventListener('DOMContentLoaded', () => {
   initTabs();
 
   const page = document.body.dataset.page;
+  if (page === 'auth') initAuth();
+  if (page === 'tutorial') initTutorial();
+  if (page === 'workspace-new') initWorkspaceNew();
+  if (page === 'analyze') initAnalyze();
   if (page === 'dashboard') renderDashboard();
   if (page === 'opportunities') renderOpportunities();
   if (page === 'campaign-detail') renderCampaignDetail();
@@ -756,4 +1561,5 @@ document.addEventListener('DOMContentLoaded', () => {
   if (page === 'enrich') renderEnrich();
   if (page === 'campaign-new') initCampaignNew();
   if (page === 'team') renderTeam();
+  if (page === 'profile') initProfile();
 });
