@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PostBloom Team</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="app-body" data-page="team">
+  <div class="mobile-overlay"></div>
+  <nav class="app-nav">
+    <div class="app-nav-inner">
+      <div class="app-brand">
+        <button class="sidebar-toggle" data-sidebar-toggle aria-label="Open navigation">☰</button>
+        <a class="app-logo" href="dashboard.html" aria-label="PostBloom home"></a>
+        <span class="workspace-name">Bloom Labs Creator Team</span>
+      </div>
+      <div class="app-nav-actions">
+        <button class="icon-button" aria-label="Notifications">🔔<span class="notification-badge">6</span></button>
+        <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
+        <div class="avatar-menu">
+          <button class="avatar-button" data-avatar-menu aria-label="Open user menu">AK</button>
+          <div class="dropdown-menu">
+            <a href="#">Profile</a>
+            <a href="#">Settings</a>
+            <a href="../index.html">Logout</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="app-shell">
+    <div class="app-layout">
+      <aside class="sidebar glass">
+        <div class="sidebar-nav">
+          <a class="sidebar-link" href="dashboard.html">📊 Dashboard</a>
+          <a class="sidebar-link" href="opportunities.html">🔥 Opportunity Feed</a>
+          <a class="sidebar-link" href="campaign-new.html">🗂️ Campaigns</a>
+          <a class="sidebar-link active" href="team.html">👥 Team</a>
+          <a class="sidebar-link" href="import.html">⬆️ Import Analytics</a>
+        </div>
+      </aside>
+
+      <main class="app-main">
+        <header class="page-header">
+          <div>
+            <div class="page-kicker">Workspace access</div>
+            <h1>Team Management</h1>
+            <p>Manage creator operations roles, assignments, and active deliverable load.</p>
+          </div>
+          <button class="btn btn-primary" id="openInviteModal">Invite Member</button>
+        </header>
+
+        <section class="team-grid" id="teamGrid"></section>
+      </main>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="inviteModal">
+    <div class="modal-card glass">
+      <div class="card-header">
+        <h2>Invite Member</h2>
+        <button class="icon-button" data-close-modal aria-label="Close invite modal">×</button>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label for="inviteEmail">Email</label>
+          <input id="inviteEmail" type="email" placeholder="teammate@company.com">
+        </div>
+        <div class="field">
+          <label for="inviteRole">Role</label>
+          <select id="inviteRole">
+            <option>Manager</option>
+            <option>Writer</option>
+            <option>Designer</option>
+            <option>Reviewer</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" data-close-modal>Cancel</button>
+        <button class="btn btn-primary" data-close-modal>Send Invite</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

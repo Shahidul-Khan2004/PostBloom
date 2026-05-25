@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PostBloom Import Analytics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="app-body" data-page="import">
+  <div class="mobile-overlay"></div>
+  <nav class="app-nav">
+    <div class="app-nav-inner">
+      <div class="app-brand">
+        <button class="sidebar-toggle" data-sidebar-toggle aria-label="Open navigation">☰</button>
+        <a class="app-logo" href="dashboard.html" aria-label="PostBloom home"></a>
+        <span class="workspace-name">Bloom Labs Creator Team</span>
+      </div>
+      <div class="app-nav-actions">
+        <button class="icon-button" aria-label="Notifications">🔔<span class="notification-badge">6</span></button>
+        <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
+        <div class="avatar-menu">
+          <button class="avatar-button" data-avatar-menu aria-label="Open user menu">AK</button>
+          <div class="dropdown-menu">
+            <a href="#">Profile</a>
+            <a href="#">Settings</a>
+            <a href="../index.html">Logout</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="app-shell">
+    <div class="app-layout">
+      <aside class="sidebar glass">
+        <div class="sidebar-nav">
+          <a class="sidebar-link" href="dashboard.html">📊 Dashboard</a>
+          <a class="sidebar-link" href="opportunities.html">🔥 Opportunity Feed</a>
+          <a class="sidebar-link" href="campaign-new.html">🗂️ Campaigns</a>
+          <a class="sidebar-link" href="team.html">👥 Team</a>
+          <a class="sidebar-link active" href="import.html">⬆️ Import Analytics</a>
+        </div>
+      </aside>
+
+      <main class="app-main">
+        <header class="page-header">
+          <div>
+            <div class="page-kicker">LinkedIn analytics import</div>
+            <h1>Import Analytics</h1>
+            <p>Upload your LinkedIn analytics spreadsheet to identify high-performing source posts.</p>
+          </div>
+        </header>
+
+        <section class="split-grid">
+          <div class="form-card glass">
+            <div class="dropzone" id="dropzone">
+              <div>
+                <div class="empty-illustration">.xlsx</div>
+                <h2>Drop LinkedIn analytics here</h2>
+                <p class="muted">Only Excel .xlsx files are accepted</p>
+              </div>
+              <input id="analyticsFile" type="file" accept=".xlsx" hidden>
+            </div>
+
+            <div class="error-card" id="importError">
+              Invalid file format. Please upload a LinkedIn analytics export as an .xlsx file.
+            </div>
+
+            <div class="file-summary content-card glass" id="fileSummary">
+              <div class="card-header">
+                <div>
+                  <h2 id="fileName">analytics.xlsx</h2>
+                  <p class="muted" id="fileSize">0 MB</p>
+                </div>
+                <button class="btn btn-primary" id="importButton">Validate & Import</button>
+              </div>
+            </div>
+
+            <div class="import-summary content-card glass" id="importSummary">
+              <h2>Import Summary</h2>
+              <div class="summary-grid">
+                <div class="mini-stat"><span>Rows found</span><strong>248</strong></div>
+                <div class="mini-stat"><span>Date range</span><strong>Apr 1 - May 24</strong></div>
+                <div class="mini-stat"><span>Warnings</span><strong>3 missing text rows</strong></div>
+              </div>
+              <div class="pill-list">
+                <span class="pill-tag">Impressions</span>
+                <span class="pill-tag">Reactions</span>
+                <span class="pill-tag">Comments</span>
+                <span class="pill-tag">Reposts</span>
+                <span class="pill-tag">Engagement rate</span>
+              </div>
+              <div class="action-row">
+                <a class="btn btn-primary" href="opportunities.html">View Opportunity Feed →</a>
+              </div>
+            </div>
+          </div>
+
+          <aside class="content-card glass">
+            <div class="card-header">
+              <h2>What to expect</h2>
+            </div>
+            <div class="activity-list">
+              <div class="activity-item"><span class="activity-dot"></span><div><strong>Parse LinkedIn metrics</strong><p class="muted">PostBloom reads impressions, reactions, comments, reposts, dates, and available post text.</p></div></div>
+              <div class="activity-item"><span class="activity-dot"></span><div><strong>Score expansion potential</strong><p class="muted">Each post receives an opportunity score based on reach and engagement signals.</p></div></div>
+              <div class="activity-item"><span class="activity-dot"></span><div><strong>Create campaign candidates</strong><p class="muted">High performers become source material for cross-platform deliverables.</p></div></div>
+            </div>
+          </aside>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

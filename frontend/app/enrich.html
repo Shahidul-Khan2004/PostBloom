@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PostBloom Enrich Source Post</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="app-body" data-page="enrich">
+  <div class="mobile-overlay"></div>
+  <nav class="app-nav">
+    <div class="app-nav-inner">
+      <div class="app-brand">
+        <button class="sidebar-toggle" data-sidebar-toggle aria-label="Open navigation">☰</button>
+        <a class="app-logo" href="dashboard.html" aria-label="PostBloom home"></a>
+        <span class="workspace-name">Bloom Labs Creator Team</span>
+      </div>
+      <div class="app-nav-actions">
+        <button class="icon-button" aria-label="Notifications">🔔<span class="notification-badge">6</span></button>
+        <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
+        <div class="avatar-menu">
+          <button class="avatar-button" data-avatar-menu aria-label="Open user menu">AK</button>
+          <div class="dropdown-menu">
+            <a href="#">Profile</a>
+            <a href="#">Settings</a>
+            <a href="../index.html">Logout</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="app-shell">
+    <div class="app-layout">
+      <aside class="sidebar glass">
+        <div class="sidebar-nav">
+          <a class="sidebar-link" href="dashboard.html">📊 Dashboard</a>
+          <a class="sidebar-link active" href="opportunities.html">🔥 Opportunity Feed</a>
+          <a class="sidebar-link" href="campaign-new.html">🗂️ Campaigns</a>
+          <a class="sidebar-link" href="team.html">👥 Team</a>
+          <a class="sidebar-link" href="import.html">⬆️ Import Analytics</a>
+        </div>
+      </aside>
+
+      <main class="app-main">
+        <header class="page-header">
+          <div>
+            <div class="breadcrumb"><a href="opportunities.html">Opportunities</a> → Enrich Source</div>
+            <h1>Source Post Enrichment</h1>
+            <p>Add missing context before creating campaign deliverables for the team.</p>
+          </div>
+        </header>
+
+        <section class="split-grid">
+          <aside>
+            <div class="metrics-grid" id="enrichMetrics"></div>
+          </aside>
+
+          <form class="form-card glass" action="campaign-new.html">
+            <div class="form-grid">
+              <div class="field">
+                <label for="postText">Post Text</label>
+                <textarea id="postText" name="postText" placeholder="Paste the LinkedIn post text"></textarea>
+              </div>
+              <div class="field">
+                <label for="postUrl">Post URL</label>
+                <input id="postUrl" name="postUrl" type="text" placeholder="https://www.linkedin.com/posts/...">
+              </div>
+              <div class="field">
+                <label for="teamNotes">Notes for team</label>
+                <textarea id="teamNotes" name="teamNotes" placeholder="Add creative direction, constraints, or audience notes"></textarea>
+              </div>
+              <div class="field">
+                <label for="sourceFile">Upload source image/doc</label>
+                <input id="sourceFile" name="sourceFile" type="file">
+              </div>
+              <button class="btn btn-primary" type="submit">Save & Create Campaign →</button>
+            </div>
+          </form>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
