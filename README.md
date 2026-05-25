@@ -8,6 +8,7 @@ Turn proven LinkedIn posts into coordinated cross-platform content campaigns.
 |------|-------------|
 | [`backend/`](backend/) | Express 5 API (active) — Swagger, tests, Postgres |
 | [`frontend/`](frontend/) | React app (deferred) |
+| [`docs/API.md`](docs/API.md) | **API reference for frontend** (canonical) |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System design |
 | [`docker-compose.yml`](docker-compose.yml) | PostgreSQL 16 for local dev |
 
@@ -24,6 +25,7 @@ npm run dev
 ```
 
 - API: http://localhost:3000  
+- **Frontend API docs:** [docs/API.md](docs/API.md)  
 - Swagger: http://localhost:3000/api/docs  
 
 See [backend/README.md](backend/README.md) for demo accounts, tests, and API modules.

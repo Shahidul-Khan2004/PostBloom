@@ -15,6 +15,15 @@ const router = Router();
  *     responses:
  *       200:
  *         description: Workspaces the user belongs to
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/WorkspaceListItem'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  */
@@ -39,6 +48,13 @@ router.get("/", requireAuth, workspaceController.list);
  *     responses:
  *       201:
  *         description: Workspace created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   $ref: '#/components/schemas/Workspace'
  *       403:
  *         $ref: '#/components/responses/Forbidden'
  */
@@ -60,6 +76,13 @@ router.post(
  *     responses:
  *       200:
  *         description: Workspace details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   $ref: '#/components/schemas/WorkspaceWithSetup'
  */
 router.get(
   "/:workspaceId",
@@ -79,6 +102,15 @@ router.get(
  *     responses:
  *       200:
  *         description: Workspace members
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/WorkspaceMember'
  */
 router.get(
   "/:workspaceId/members",
