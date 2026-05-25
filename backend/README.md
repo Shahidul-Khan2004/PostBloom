@@ -22,10 +22,13 @@ npm run dev
 ```
 
 - API: http://localhost:3000
+- **API reference (frontend):** [`../docs/API.md`](../docs/API.md) — canonical contract; start here
 - Swagger UI: http://localhost:3000/api/docs
 - OpenAPI JSON: http://localhost:3000/api/docs/openapi.json
 
 To call protected endpoints in Swagger UI, run **POST /api/v1/auth/login**, copy `data.token`, click **Authorize**, and enter `Bearer <token>`.
+
+When changing routes or response shapes, update `docs/API.md`, the route `@openapi` blocks, and run `npm run docs:check`.
 
 ## Platform RBAC
 

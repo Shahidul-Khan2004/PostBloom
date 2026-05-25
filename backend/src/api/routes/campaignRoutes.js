@@ -402,18 +402,25 @@ router.get(
  *         application/json:
  *           schema:
  *             type: object
- *             required: [payload]
  *             properties:
  *               payload:
  *                 type: object
  *                 additionalProperties: true
+ *                 description: Required for writers (platform fieldSchema). Omit for designers.
+ *               externalUrl:
+ *                 type: string
+ *                 format: uri
+ *                 description: Required for designers. Writers must not send this.
  *     responses:
  *       201:
  *         description: Version submitted
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/DataEnvelope'
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   $ref: '#/components/schemas/VersionSubmitted'
  *       401:
  *         $ref: '#/components/responses/Unauthorized'
  *       403:

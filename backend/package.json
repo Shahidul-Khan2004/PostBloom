@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --env-file=.env.test --test-concurrency=1 --test test/**/*.test.js",
-    "test:watch": "node --env-file=.env.test --test-concurrency=1 --test --watch test/**/*.test.js"
+    "test:watch": "node --env-file=.env.test --test-concurrency=1 --test --watch test/**/*.test.js",
+    "docs:check": "node scripts/check-api-docs.js"
   },
   "engines": {
     "node": ">=20"
