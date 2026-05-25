@@ -1,4 +1,6 @@
 import { query, getPool } from "../config/db.js";
+import { classifyPostEvidence } from "../domain/opportunityScoring.js";
+import { toApiDateOnly } from "../lib/dateFormat.js";
 
 export async function getOrCreateCreatorAccount(workspaceId) {
   const { rows } = await query(
@@ -55,17 +57,27 @@ export async function bulkInsertPostsAndScores(client, creatorAccountId, importI
       ]
     );
     const post = rows[0];
-    await client.query(
-      `INSERT INTO opportunity_scores (source_post_id, score, rank, score_breakdown, recommendation_label)
-       VALUES ($1,$2,$3,$4,$5)`,
-      [
-        post.id,
-        p.score,
-        p.rank,
-        JSON.stringify(p.scoreBreakdown),
-        p.recommendationLabel,
-      ]
-    );
+    if (p.score != null) {
+      const breakdown = {
+        ...p.scoreBreakdown,
+        evidenceType: p.evidenceType,
+        scoreBasis: p.scoreBasis,
+        confidence: p.confidence,
+        recommendationReasons: p.recommendationReasons ?? [],
+        rankWithinEvidenceType: p.rankWithinEvidenceType,
+      };
+      await client.query(
+        `INSERT INTO opportunity_scores (source_post_id, score, rank, score_breakdown, recommendation_label)
+         VALUES ($1,$2,$3,$4,$5)`,
+        [
+          post.id,
+          p.score,
+          p.rank,
+          JSON.stringify(breakdown),
+          p.recommendationLabel,
+        ]
+      );
+    }
     posts.push(post);
   }
   return posts;
@@ -103,10 +115,28 @@ export async function findImportByPublicUuid(publicUuid, workspaceId) {
 }
 
 export function mapOpportunityFromRow(row) {
+  const breakdown = row.score_breakdown ?? {};
+  const derived = classifyPostEvidence({
+    impressions: row.impressions != null ? Number(row.impressions) : null,
+    engagements: row.engagements != null ? Number(row.engagements) : null,
+    engagementRate: row.engagement_rate != null ? Number(row.engagement_rate) : null,
+  });
+
+  const evidenceType = breakdown.evidenceType ?? derived.evidenceType;
+  const scoreBasis = breakdown.scoreBasis ?? derived.scoreBasis;
+  const confidence = breakdown.confidence ?? derived.confidence;
+  const recommendationReasons =
+    breakdown.recommendationReasons ?? [];
+  const rankWithinEvidenceType =
+    breakdown.rankWithinEvidenceType ?? null;
+
+  const { recommendationReasons: _rr, rankWithinEvidenceType: _rw, evidenceType: _et, scoreBasis: _sb, confidence: _c, ...scoreBreakdown } =
+    breakdown;
+
   return {
     publicUuid: row.public_uuid,
     linkedinPostUrl: row.linkedin_post_url,
-    publishDate: row.publish_date,
+    publishDate: toApiDateOnly(row.publish_date),
     impressions: row.impressions != null ? Number(row.impressions) : null,
     engagements: row.engagements != null ? Number(row.engagements) : null,
     engagementRate: row.engagement_rate != null ? Number(row.engagement_rate) : null,
@@ -116,8 +146,13 @@ export function mapOpportunityFromRow(row) {
     enrichedAt: row.enriched_at,
     score: row.score != null ? Number(row.score) : null,
     rank: row.rank,
-    scoreBreakdown: row.score_breakdown,
+    scoreBreakdown: Object.keys(scoreBreakdown).length > 0 ? scoreBreakdown : null,
     recommendationLabel: row.recommendation_label,
+    evidenceType,
+    scoreBasis,
+    confidence,
+    recommendationReasons,
+    rankWithinEvidenceType,
     importPublicUuid: row.import_public_uuid,
   };
 }
@@ -135,7 +170,7 @@ export async function listOpportunities(workspaceId, { sort = "score" } = {}) {
      ORDER BY ${order}`,
     [workspaceId]
   );
-  return rows.map(mapOpportunityFromRow);
+  return rows;
 }
 
 export async function findOpportunityByPublicUuid(publicUuid, workspaceId) {

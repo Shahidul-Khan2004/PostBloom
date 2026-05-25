@@ -2,10 +2,21 @@ import { getPool } from "../config/db.js";
 import BackendError from "../lib/BackendError.js";
 import { parseLinkedInAnalyticsXlsx } from "../integrations/linkedinXlsxParser.js";
 import { scoreOpportunities } from "../domain/opportunityScoring.js";
+import { toApiDateOnly } from "../lib/dateFormat.js";
 import * as analyticsRepo from "../repositories/analyticsRepository.js";
 import * as workspaceRepo from "../repositories/workspaceRepository.js";
 import * as auditRepo from "../repositories/auditRepository.js";
-import * as notificationRepo from "../repositories/notificationRepository.js";
+
+function mapTopOpportunity(p) {
+  return {
+    linkedinPostUrl: p.linkedinPostUrl,
+    score: p.score,
+    rankWithinEvidenceType: p.rankWithinEvidenceType,
+    evidenceType: p.evidenceType,
+    recommendationLabel: p.recommendationLabel,
+    recommendationReasons: p.recommendationReasons ?? [],
+  };
+}
 
 export async function importAnalytics(workspacePublicUuid, actorUserId, file) {
   const workspace = await workspaceRepo.findByPublicUuid(workspacePublicUuid);
@@ -50,23 +61,28 @@ export async function importAnalytics(workspacePublicUuid, actorUserId, file) {
       entityId: imp.id,
       entityPublicUuid: imp.public_uuid,
       action: "imported",
-      metadata: { posts: scored.length, warnings: parsed.warnings },
+      metadata: {
+        posts: scored.length,
+        metricsCoverage: parsed.metricsCoverage,
+      },
     });
 
-    const top5 = scored.slice(0, 5).map((p) => ({
-      linkedinPostUrl: p.linkedinPostUrl,
-      score: p.score,
-      rank: p.rank,
-      recommendationLabel: p.recommendationLabel,
-    }));
+    const validated = scored.filter((p) => p.evidenceType === "engagement_validated");
+    const reachOnly = scored.filter((p) => p.evidenceType === "reach_only");
 
     return {
       importPublicUuid: imp.public_uuid,
       postsImported: scored.length,
+      metricsCoverage: parsed.metricsCoverage,
+      notices: parsed.notices,
       warnings: parsed.warnings,
-      dateRange: { start: parsed.dateRangeStart, end: parsed.dateRangeEnd },
+      dateRange: {
+        start: parsed.dateRangeStart,
+        end: parsed.dateRangeEnd,
+      },
       discovery: parsed.discovery,
-      topPosts: top5,
+      topPosts: validated.slice(0, 5).map(mapTopOpportunity),
+      topReachSignals: reachOnly.slice(0, 5).map(mapTopOpportunity),
     };
   } catch (err) {
     await client.query("ROLLBACK");
@@ -84,12 +100,17 @@ export async function listImports(workspaceId) {
 export async function getImportSummary(workspaceId, importPublicUuid) {
   const imp = await analyticsRepo.findImportByPublicUuid(importPublicUuid, workspaceId);
   if (!imp) throw new BackendError(404, "NOT_FOUND", "Import not found");
+
+  const rowCounts = imp.row_counts ?? {};
+  const metricsCoverage = rowCounts.metricsCoverage ?? null;
+
   return {
     publicUuid: imp.public_uuid,
     originalFilename: imp.original_filename,
-    dateRangeStart: imp.date_range_start,
-    dateRangeEnd: imp.date_range_end,
-    rowCounts: imp.row_counts,
+    dateRangeStart: toApiDateOnly(imp.date_range_start),
+    dateRangeEnd: toApiDateOnly(imp.date_range_end),
+    rowCounts,
+    metricsCoverage,
     warnings: imp.warnings,
     discoverySummary: imp.discovery_summary,
     createdAt: imp.created_at,
@@ -97,7 +118,23 @@ export async function getImportSummary(workspaceId, importPublicUuid) {
 }
 
 export async function listOpportunities(workspaceId, query) {
-  return analyticsRepo.listOpportunities(workspaceId, query);
+  const rows = await analyticsRepo.listOpportunities(workspaceId, query);
+  const mapped = rows.map(analyticsRepo.mapOpportunityFromRow);
+
+  if (query?.sort === "date") {
+    return mapped.sort((a, b) => {
+      const da = a.publishDate ?? "";
+      const db = b.publishDate ?? "";
+      return db.localeCompare(da);
+    });
+  }
+
+  return mapped.sort((a, b) => {
+    const tierA = a.evidenceType === "engagement_validated" ? 0 : a.evidenceType === "reach_only" ? 1 : 2;
+    const tierB = b.evidenceType === "engagement_validated" ? 0 : b.evidenceType === "reach_only" ? 1 : 2;
+    if (tierA !== tierB) return tierA - tierB;
+    return (a.rankWithinEvidenceType ?? 999) - (b.rankWithinEvidenceType ?? 999);
+  });
 }
 
 export async function getOpportunity(workspaceId, publicUuid) {

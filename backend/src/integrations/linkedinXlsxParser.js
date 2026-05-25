@@ -1,5 +1,9 @@
 import * as XLSX from "xlsx";
 import BackendError from "../lib/BackendError.js";
+import { classifyPostEvidence } from "../domain/opportunityScoring.js";
+import { formatDateOnly } from "../lib/dateFormat.js";
+
+export { formatDateOnly };
 
 function normalizeUrl(url) {
   if (!url || typeof url !== "string") return "";
@@ -7,14 +11,7 @@ function normalizeUrl(url) {
 }
 
 function parseDate(value) {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  if (typeof value === "number") {
-    const d = XLSX.SSF.parse_date_code(value);
-    if (d) return new Date(d.y, d.m - 1, d.d);
-  }
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  return formatDateOnly(value);
 }
 
 function sheetToRows(workbook, name) {
@@ -121,7 +118,32 @@ function parseDateRange(discovery) {
   const dr = discovery?.dateRange;
   if (typeof dr !== "string" || !dr.includes(" - ")) return { start: null, end: null };
   const [a, b] = dr.split(" - ");
-  return { start: parseDate(a?.trim()), end: parseDate(b?.trim()) };
+  return { start: formatDateOnly(a?.trim()), end: formatDateOnly(b?.trim()) };
+}
+
+function buildMetricsCoverage(posts) {
+  let engagementValidatedPosts = 0;
+  let reachOnlyPosts = 0;
+  for (const post of posts) {
+    const tier = classifyPostEvidence(post);
+    if (tier.evidenceType === "engagement_validated") engagementValidatedPosts += 1;
+    else if (tier.evidenceType === "reach_only") reachOnlyPosts += 1;
+  }
+  const postsImported = posts.length;
+  const notices = [];
+  if (reachOnlyPosts > 0 || engagementValidatedPosts > 0) {
+    notices.push(
+      `LinkedIn supplied engagement metrics for ${engagementValidatedPosts} imported posts. Another ${reachOnlyPosts} posts contain reach-only data and are available as limited-evidence opportunities.`
+    );
+  }
+  return {
+    metricsCoverage: {
+      postsImported,
+      engagementValidatedPosts,
+      reachOnlyPosts,
+    },
+    notices,
+  };
 }
 
 /**
@@ -142,11 +164,7 @@ export function parseLinkedInAnalyticsXlsx(buffer) {
     throw new BackendError(422, "INVALID_XLSX", "No posts found in TOP POSTS sheet");
   }
 
-  const warnings = [];
-  const impressionsOnly = posts.filter((p) => p.engagements == null).length;
-  if (impressionsOnly > 0) {
-    warnings.push(`${impressionsOnly} posts have impressions only (engagements missing in export)`);
-  }
+  const { metricsCoverage, notices } = buildMetricsCoverage(posts);
 
   let discovery = {};
   if (sheetNames.includes("DISCOVERY")) {
@@ -161,12 +179,15 @@ export function parseLinkedInAnalyticsXlsx(buffer) {
     dateRangeStart: start,
     dateRangeEnd: end,
     posts,
-    warnings,
+    warnings: [],
+    metricsCoverage,
+    notices,
     rowCounts: {
       posts: posts.length,
       engagementDaily: sheetNames.includes("ENGAGEMENT")
         ? Math.max(0, (sheetToRows(workbook, "ENGAGEMENT")?.length ?? 0) - 1)
         : 0,
+      metricsCoverage,
     },
   };
 }

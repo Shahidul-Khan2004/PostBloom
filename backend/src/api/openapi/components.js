@@ -187,6 +187,25 @@ export const openApiComponents = {
         joinedAt: { type: "string", format: "date-time" },
       },
     },
+    MetricsCoverage: {
+      type: "object",
+      properties: {
+        postsImported: { type: "integer" },
+        engagementValidatedPosts: { type: "integer" },
+        reachOnlyPosts: { type: "integer" },
+      },
+    },
+    TopOpportunitySummary: {
+      type: "object",
+      properties: {
+        linkedinPostUrl: { type: "string" },
+        score: { type: "number" },
+        rankWithinEvidenceType: { type: "integer" },
+        evidenceType: { type: "string", enum: ["engagement_validated", "reach_only"] },
+        recommendationLabel: { type: "string" },
+        recommendationReasons: { type: "array", items: { type: "string" } },
+      },
+    },
     Opportunity: {
       type: "object",
       properties: {
@@ -202,8 +221,25 @@ export const openApiComponents = {
         enrichedAt: { type: "string", format: "date-time", nullable: true },
         score: { type: "number", nullable: true },
         rank: { type: "integer", nullable: true },
+        rankWithinEvidenceType: { type: "integer", nullable: true },
         scoreBreakdown: { type: "object", nullable: true },
         recommendationLabel: { type: "string", nullable: true },
+        recommendationReasons: { type: "array", items: { type: "string" } },
+        evidenceType: {
+          type: "string",
+          nullable: true,
+          enum: ["engagement_validated", "reach_only"],
+        },
+        scoreBasis: {
+          type: "string",
+          nullable: true,
+          enum: ["full_metrics", "reach_only"],
+        },
+        confidence: {
+          type: "string",
+          nullable: true,
+          enum: ["strong_evidence", "limited_evidence"],
+        },
         importPublicUuid: { type: "string", format: "uuid" },
       },
     },
@@ -212,7 +248,9 @@ export const openApiComponents = {
       properties: {
         importPublicUuid: { type: "string", format: "uuid" },
         postsImported: { type: "integer" },
-        warnings: { type: "array", items: { type: "object" } },
+        metricsCoverage: { $ref: "#/components/schemas/MetricsCoverage" },
+        notices: { type: "array", items: { type: "string" } },
+        warnings: { type: "array", items: { type: "string" } },
         dateRange: {
           type: "object",
           properties: {
@@ -223,15 +261,11 @@ export const openApiComponents = {
         discovery: { type: "object" },
         topPosts: {
           type: "array",
-          items: {
-            type: "object",
-            properties: {
-              linkedinPostUrl: { type: "string" },
-              score: { type: "number" },
-              rank: { type: "integer" },
-              recommendationLabel: { type: "string" },
-            },
-          },
+          items: { $ref: "#/components/schemas/TopOpportunitySummary" },
+        },
+        topReachSignals: {
+          type: "array",
+          items: { $ref: "#/components/schemas/TopOpportunitySummary" },
         },
       },
     },
@@ -243,7 +277,8 @@ export const openApiComponents = {
         dateRangeStart: { type: "string", format: "date" },
         dateRangeEnd: { type: "string", format: "date" },
         rowCounts: { type: "object" },
-        warnings: { type: "array", items: { type: "object" } },
+        metricsCoverage: { $ref: "#/components/schemas/MetricsCoverage" },
+        warnings: { type: "array", items: { type: "string" } },
         discoverySummary: { type: "object" },
         createdAt: { type: "string", format: "date-time" },
       },

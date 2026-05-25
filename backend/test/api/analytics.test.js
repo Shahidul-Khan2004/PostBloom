@@ -22,6 +22,21 @@ dbTest("POST analytics/import uploads fixture XLSX", async () => {
     .attach("file", buffer, "linkedin-sample.xlsx");
   assert.equal(res.status, 201);
   assert.ok(res.body.data.postsImported >= 3);
+  assert.ok(res.body.data.metricsCoverage);
+  assert.equal(
+    res.body.data.metricsCoverage.postsImported,
+    res.body.data.postsImported
+  );
+  if (res.body.data.dateRange?.start) {
+    assert.match(res.body.data.dateRange.start, /^\d{4}-\d{2}-\d{2}$/);
+  }
+  for (const p of res.body.data.topPosts ?? []) {
+    assert.equal(p.evidenceType, "engagement_validated");
+    assert.ok(p.rankWithinEvidenceType >= 1);
+  }
+  for (const p of res.body.data.topReachSignals ?? []) {
+    assert.equal(p.evidenceType, "reach_only");
+  }
 });
 
 dbTest("GET opportunities returns ranked list after import", async () => {
@@ -38,6 +53,13 @@ dbTest("GET opportunities returns ranked list after import", async () => {
     .set(authHeader(token));
   assert.equal(res.status, 200);
   assert.ok(res.body.data[0].score != null);
+  assert.ok(res.body.data[0].evidenceType);
+  if (res.body.data.length > 1) {
+    const firstReachIdx = res.body.data.findIndex((o) => o.evidenceType === "reach_only");
+    if (firstReachIdx > 0) {
+      assert.equal(res.body.data[firstReachIdx - 1].evidenceType, "engagement_validated");
+    }
+  }
 });
 
 dbTest("PATCH enrich opportunity requires title", async () => {

@@ -294,20 +294,42 @@ All routes: `requirePermission("analytics:import")`.
   "data": {
     "importPublicUuid": "…",
     "postsImported": 42,
+    "metricsCoverage": {
+      "postsImported": 42,
+      "engagementValidatedPosts": 13,
+      "reachOnlyPosts": 23
+    },
+    "notices": [
+      "LinkedIn supplied engagement metrics for 13 imported posts. Another 23 posts contain reach-only data and are available as limited-evidence opportunities."
+    ],
     "warnings": [],
-    "dateRange": { "start": "2025-01-01", "end": "2025-03-31" },
+    "dateRange": { "start": "2025-05-26", "end": "2026-05-25" },
     "discovery": {},
     "topPosts": [
       {
         "linkedinPostUrl": "https://…",
         "score": 85.2,
-        "rank": 1,
-        "recommendationLabel": "High-performing vs your imported LinkedIn posts — …"
+        "rankWithinEvidenceType": 1,
+        "evidenceType": "engagement_validated",
+        "recommendationLabel": "Breakout reach opportunity",
+        "recommendationReasons": ["…"]
+      }
+    ],
+    "topReachSignals": [
+      {
+        "linkedinPostUrl": "https://…",
+        "score": 42.6,
+        "rankWithinEvidenceType": 1,
+        "evidenceType": "reach_only",
+        "recommendationLabel": "Reach-led signal",
+        "recommendationReasons": ["…"]
       }
     ]
   }
 }
 ```
+
+Reporting window dates are **date-only** (`YYYY-MM-DD`), not timestamps. `topPosts` contains only engagement-validated opportunities; `topReachSignals` contains reach-only posts. Scores across the two groups are not directly comparable.
 
 **Errors:** `404`, `403`, `422 INVALID_XLSX` (parser), `422` if file missing
 
@@ -328,9 +350,14 @@ All routes: `requirePermission("analytics:import")`.
   "data": {
     "publicUuid": "…",
     "originalFilename": "export.xlsx",
-    "dateRangeStart": "…",
-    "dateRangeEnd": "…",
+    "dateRangeStart": "2025-05-26",
+    "dateRangeEnd": "2026-05-25",
     "rowCounts": {},
+    "metricsCoverage": {
+      "postsImported": 42,
+      "engagementValidatedPosts": 13,
+      "reachOnlyPosts": 23
+    },
     "warnings": [],
     "discoverySummary": {},
     "createdAt": "…"
@@ -351,9 +378,9 @@ Permission: `analytics:import` for list/get; `opportunity:enrich` for patch.
 
 | Query | Default | Description |
 |-------|---------|-------------|
-| `sort` | `score` | `score` → rank ascending; `date` → publish date descending |
+| `sort` | `score` | Engagement-validated opportunities first (by `rankWithinEvidenceType`), then reach-only signals; `date` → publish date descending |
 
-**Response `200`:** array of [Opportunity](#opportunity).
+**Response `200`:** array of [Opportunity](#opportunity). Engagement-validated and reach-only scores are ranked within their evidence tier only — not comparable across tiers.
 
 #### Get opportunity
 
@@ -693,21 +720,28 @@ Only **specialist** or **admin** accounts. Adds active workspace membership.
 {
   publicUuid: string;
   linkedinPostUrl: string;
-  publishDate: string | null;
+  publishDate: string | null;  // YYYY-MM-DD
   impressions: number | null;
   engagements: number | null;
-  engagementRate: number | null;
+  engagementRate: number | null;  // ratio 0–1 when present; null if reach-only
   enrichmentTitle: string | null;
   enrichmentExcerpt: string | null;
   enrichmentNotes: string | null;
   enrichedAt: string | null;
   score: number | null;
-  rank: number | null;
+  rank: number | null;  // legacy global order: validated first, then reach-only
+  rankWithinEvidenceType: number | null;
   scoreBreakdown: object | null;
   recommendationLabel: string | null;
+  recommendationReasons: string[];
+  evidenceType: "engagement_validated" | "reach_only" | null;
+  scoreBasis: "full_metrics" | "reach_only" | null;
+  confidence: "strong_evidence" | "limited_evidence" | null;
   importPublicUuid: string;
 }
 ```
+
+**Evidence tiers:** `engagement_validated` requires `impressions`, `engagements`, and `engagementRate` (including `engagements: 0`). `reach_only` requires impressions with `engagements` and `engagementRate` null. Reach-only `scoreBreakdown` omits engagement percentiles and lists `excludedMetrics`.
 
 ### PlatformType
 
