@@ -141,3 +141,18 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# cursor
+.cursor/
+
+# PostBloom
+backend/uploads/
+backend/node_modules/
+*.xlsx
+!backend/test/fixtures/*.xlsx
+.env
+.env.*
+!.env.example
+!backend/.env.example
+!backend/.env.test
+frontend/node_modules/
