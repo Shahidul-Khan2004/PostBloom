@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Generate Analysis | PostBloom</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="app-body" data-page="analyze">
+  <main class="onboarding-shell">
+    <div class="tutorial-top">
+      <a class="app-logo" href="../index.html" aria-label="PostBloom home"></a>
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
+    </div>
+
+    <header class="page-header onboarding-header">
+      <div>
+        <div class="page-kicker">Analytics import</div>
+        <h1>Upload analytics and generate analysis.</h1>
+        <p>CSV files are analyzed in the browser. XLSX files follow the backend API contract for LinkedIn analytics imports.</p>
+      </div>
+    </header>
+
+    <section class="split-grid">
+      <div class="form-card glass">
+        <div class="dropzone" id="analysisDropzone">
+          <div>
+            <div class="empty-illustration">CSV</div>
+            <h2>Drop your analytics file here</h2>
+            <p class="muted">Accepts .csv for instant analysis or .xlsx for backend import</p>
+          </div>
+          <input id="analysisFile" type="file" accept=".csv,.xlsx" hidden>
+        </div>
+
+        <div class="error-card" id="analysisError"></div>
+
+        <div class="file-summary content-card glass" id="analysisFileSummary">
+          <div class="card-header">
+            <div>
+              <h2 id="analysisFileName">analytics.csv</h2>
+              <p class="muted" id="analysisFileSize">0 MB</p>
+            </div>
+            <button class="btn btn-primary" id="generateAnalysis">Generate</button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="content-card glass">
+        <div class="card-header">
+          <h2>Expected columns</h2>
+        </div>
+        <div class="pill-list">
+          <span class="pill-tag">date</span>
+          <span class="pill-tag">impressions</span>
+          <span class="pill-tag">reactions</span>
+          <span class="pill-tag">comments</span>
+          <span class="pill-tag">reposts</span>
+          <span class="pill-tag">text</span>
+        </div>
+      </aside>
+    </section>
+
+    <section class="analysis-results" id="analysisResults" hidden>
+      <div class="metrics-grid" id="analysisMetrics"></div>
+      <div class="table-card glass">
+        <div class="card-header">
+          <h2>Top Opportunities</h2>
+          <a class="btn btn-secondary" href="opportunities.html">Open Feed</a>
+        </div>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Preview</th>
+                <th>Date</th>
+                <th>Reach</th>
+                <th>Top Score</th>
+                <th>Recommendation</th>
+              </tr>
+            </thead>
+            <tbody id="analysisRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

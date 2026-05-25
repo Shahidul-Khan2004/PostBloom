@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PostBloom Tutorial</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="app-body" data-page="tutorial">
+  <main class="onboarding-shell">
+    <div class="tutorial-top">
+      <a class="app-logo" href="../index.html" aria-label="PostBloom home"></a>
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
+    </div>
+
+    <section class="tutorial-frame glass">
+      <div class="tutorial-copy">
+        <div class="page-kicker" id="tutorialStep">Step 1 of 5</div>
+        <h1 id="tutorialTitle">Understand your workspace</h1>
+        <p id="tutorialText">PostBloom starts with a workspace for your creator team, campaigns, imports, and deliverables.</p>
+      </div>
+
+      <figure class="tutorial-media">
+        <img id="tutorialImage" src="assets/ss1.png" alt="PostBloom tutorial screenshot">
+      </figure>
+
+      <div class="tutorial-controls">
+        <button class="btn btn-secondary" type="button" id="tutorialPrev">Back</button>
+        <div class="tutorial-dots" id="tutorialDots" aria-label="Tutorial progress"></div>
+        <button class="btn btn-primary" type="button" id="tutorialNext">Next</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
