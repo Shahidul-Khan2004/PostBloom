@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PostBloom Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="auth-body" data-page="login">
+  <button class="theme-toggle auth-theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
+
+  <main class="auth-shell">
+    <section class="auth-card glass">
+      <header class="auth-header">
+        <a class="auth-logo auth-logo-image" href="../index.html" aria-label="PostBloom home"></a>
+        <p class="muted">Welcome back</p>
+      </header>
+
+      <form class="auth-form" id="loginForm" novalidate>
+        <div class="auth-error" id="loginError">Invalid email or password. Try the demo credentials below.</div>
+
+        <div class="auth-field">
+          <label for="loginEmail">Email</label>
+          <input id="loginEmail" type="email" placeholder="you@example.com" autocomplete="email">
+          <span class="inline-error" data-error-for="loginEmail"></span>
+        </div>
+
+        <div class="auth-field">
+          <label for="loginPassword">Password</label>
+          <input id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password">
+          <span class="inline-error" data-error-for="loginPassword"></span>
+        </div>
+
+        <div class="auth-options">
+          <label class="check-row">
+            <input type="checkbox" id="rememberMe">
+            <span>Remember me</span>
+          </label>
+          <a class="auth-link" href="#">Forgot password?</a>
+        </div>
+
+        <button class="btn btn-primary auth-submit" id="loginButton" type="submit">Sign In</button>
+      </form>
+
+      <p class="auth-footer">
+        Don't have an account? <a class="auth-link" href="register.html">Register →</a>
+      </p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

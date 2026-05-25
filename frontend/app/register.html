@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PostBloom Register</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="auth-body" data-page="register">
+  <button class="theme-toggle auth-theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
+
+  <main class="auth-shell">
+    <section class="auth-card auth-card-wide glass">
+      <header class="auth-header">
+        <a class="auth-logo auth-logo-image" href="../index.html" aria-label="PostBloom home"></a>
+        <p class="muted">Create your creator team account</p>
+      </header>
+
+      <form class="auth-form" id="registerForm" novalidate>
+        <div class="auth-success" id="registerSuccess">Account created! Redirecting to login…</div>
+
+        <div class="auth-field">
+          <label for="registerName">Full Name</label>
+          <input id="registerName" type="text" placeholder="Your full name" autocomplete="name">
+          <span class="inline-error" data-error-for="registerName"></span>
+        </div>
+
+        <div class="auth-field">
+          <label for="registerEmail">Email</label>
+          <input id="registerEmail" type="email" placeholder="you@example.com" autocomplete="email">
+          <span class="inline-error" data-error-for="registerEmail"></span>
+        </div>
+
+        <div class="auth-field">
+          <label for="registerPassword">Password</label>
+          <input id="registerPassword" type="password" placeholder="At least 8 characters with a number" autocomplete="new-password">
+          <div class="strength-meter" aria-hidden="true">
+            <span class="strength-segment" data-strength-segment></span>
+            <span class="strength-segment" data-strength-segment></span>
+            <span class="strength-segment" data-strength-segment></span>
+            <span class="strength-segment" data-strength-segment></span>
+          </div>
+          <span class="inline-error" data-error-for="registerPassword"></span>
+        </div>
+
+        <div class="auth-field">
+          <label for="confirmPassword">Confirm Password</label>
+          <input id="confirmPassword" type="password" placeholder="Repeat password" autocomplete="new-password">
+          <span class="inline-error" data-error-for="confirmPassword"></span>
+        </div>
+
+        <div class="auth-field">
+          <label for="registerRole">Role</label>
+          <select id="registerRole">
+            <option>Writer</option>
+            <option>Designer</option>
+            <option>Reviewer</option>
+          </select>
+        </div>
+
+        <div class="auth-field">
+          <label class="check-row">
+            <input type="checkbox" id="terms">
+            <span>I agree to the Terms of Service</span>
+          </label>
+          <span class="inline-error" data-error-for="terms"></span>
+        </div>
+
+        <button class="btn btn-primary auth-submit" type="submit">Create Account</button>
+      </form>
+
+      <p class="auth-footer">
+        Already have an account? <a class="auth-link" href="login.html">Sign in →</a>
+      </p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

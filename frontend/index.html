@@ -10,6 +10,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="styles.css">
+  <script>
+    if (!localStorage.getItem('postbloom_user')) {
+      window.location.href = 'app/login.html';
+    }
+  </script>
 </head>
 <body>
 
@@ -31,6 +36,7 @@
       <div class="nav-actions">
         <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
         <time class="digital-clock" id="digitalClock" aria-label="Current time">--:--:--</time>
+        <button class="btn btn-secondary nav-logout" id="logoutButton" type="button">Logout</button>
       </div>
     </div>
   </nav>
@@ -72,13 +78,47 @@
         <div class="chart">
           <h3>Creator Performance Analytics</h3>
 
-          <div class="bars">
-            <div class="bar"></div>
-            <div class="bar"></div>
-            <div class="bar"></div>
-            <div class="bar"></div>
-            <div class="bar"></div>
-            <div class="bar"></div>
+          <div class="graph-chart">
+            <svg viewBox="0 0 400 220" preserveAspectRatio="xMidYMid meet">
+              <defs>
+                <linearGradient id="grad1" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.5"/>
+                  <stop offset="40%" stop-color="#06b6d4" stop-opacity="0.2"/>
+                  <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.02"/>
+                </linearGradient>
+                <filter id="glow1">
+                  <feGaussianBlur stdDeviation="3" result="blur"/>
+                  <feMerge>
+                    <feMergeNode in="blur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                  </feMerge>
+                </filter>
+              </defs>
+
+              <line class="chart-grid" x1="0" y1="55" x2="400" y2="55"/>
+              <line class="chart-grid" x1="0" y1="110" x2="400" y2="110"/>
+              <line class="chart-grid" x1="0" y1="165" x2="400" y2="165"/>
+
+              <text class="chart-label" x="40" y="210">Mon</text>
+              <text class="chart-label" x="120" y="210">Tue</text>
+              <text class="chart-label" x="200" y="210">Wed</text>
+              <text class="chart-label" x="280" y="210">Thu</text>
+              <text class="chart-label" x="360" y="210">Fri</text>
+
+              <polyline class="chart-line" stroke="url(#grad1)" points="40,170 120,120 200,85 280,45 360,65 390,15"/>
+              <polygon class="chart-area" fill="url(#grad1)" points="40,170 120,120 200,85 280,45 360,65 390,15 390,220 40,220"/>
+
+              <g filter="url(#glow1)">
+                <circle class="chart-dot" cx="40" cy="170" r="4" fill="#8b5cf6"/>
+                <circle class="chart-dot" cx="120" cy="120" r="4" fill="#8b5cf6"/>
+                <circle class="chart-dot" cx="200" cy="85" r="4" fill="#8b5cf6"/>
+                <circle class="chart-dot" cx="280" cy="45" r="4" fill="#06b6d4"/>
+                <circle class="chart-dot" cx="360" cy="65" r="4" fill="#8b5cf6"/>
+                <circle class="chart-dot" cx="390" cy="15" r="4" fill="#06b6d4"/>
+              </g>
+
+              <circle class="chart-dot-ring" cx="390" cy="15" r="4" fill="none" stroke="#06b6d4" stroke-width="1.5"/>
+            </svg>
           </div>
         </div>
 
@@ -263,13 +303,47 @@
         <div class="chart">
           <h3>AI Growth Intelligence</h3>
 
-          <div class="bars">
-            <div class="bar"></div>
-            <div class="bar"></div>
-            <div class="bar"></div>
-            <div class="bar"></div>
-            <div class="bar"></div>
-            <div class="bar"></div>
+          <div class="graph-chart">
+            <svg viewBox="0 0 400 220" preserveAspectRatio="xMidYMid meet">
+              <defs>
+                <linearGradient id="grad2" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.5"/>
+                  <stop offset="40%" stop-color="#8b5cf6" stop-opacity="0.2"/>
+                  <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.02"/>
+                </linearGradient>
+                <filter id="glow2">
+                  <feGaussianBlur stdDeviation="3" result="blur"/>
+                  <feMerge>
+                    <feMergeNode in="blur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                  </feMerge>
+                </filter>
+              </defs>
+
+              <line class="chart-grid" x1="0" y1="55" x2="400" y2="55"/>
+              <line class="chart-grid" x1="0" y1="110" x2="400" y2="110"/>
+              <line class="chart-grid" x1="0" y1="165" x2="400" y2="165"/>
+
+              <text class="chart-label" x="40" y="210">Mon</text>
+              <text class="chart-label" x="120" y="210">Tue</text>
+              <text class="chart-label" x="200" y="210">Wed</text>
+              <text class="chart-label" x="280" y="210">Thu</text>
+              <text class="chart-label" x="360" y="210">Fri</text>
+
+              <polyline class="chart-line" stroke="url(#grad2)" points="40,185 120,155 200,170 280,100 360,50 390,70"/>
+              <polygon class="chart-area" fill="url(#grad2)" points="40,185 120,155 200,170 280,100 360,50 390,70 390,220 40,220"/>
+
+              <g filter="url(#glow2)">
+                <circle class="chart-dot" cx="40" cy="185" r="4" fill="#8b5cf6"/>
+                <circle class="chart-dot" cx="120" cy="155" r="4" fill="#8b5cf6"/>
+                <circle class="chart-dot" cx="200" cy="170" r="4" fill="#06b6d4"/>
+                <circle class="chart-dot" cx="280" cy="100" r="4" fill="#8b5cf6"/>
+                <circle class="chart-dot" cx="360" cy="50" r="4" fill="#06b6d4"/>
+                <circle class="chart-dot" cx="390" cy="70" r="4" fill="#8b5cf6"/>
+              </g>
+
+              <circle class="chart-dot-ring" cx="360" cy="50" r="4" fill="none" stroke="#06b6d4" stroke-width="1.5"/>
+            </svg>
           </div>
         </div>
 
@@ -398,6 +472,12 @@
 
   updateClock();
   setInterval(updateClock, 1000);
+
+  const logoutButton = document.getElementById('logoutButton');
+  logoutButton.addEventListener('click', () => {
+    localStorage.removeItem('postbloom_user');
+    window.location.href = 'app/login.html';
+  });
 </script>
 
 </body>

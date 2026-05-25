@@ -1,3 +1,27 @@
+const page = document.body ? document.body.dataset.page : '';
+const authFreePages = ['login', 'register'];
+const user = JSON.parse(localStorage.getItem('postbloom_user'));
+
+function appUrl(fileName) {
+  if (window.location.pathname.includes('/frontend/app/')) {
+    return fileName;
+  }
+
+  return `/app/${fileName}`;
+}
+
+function landingUrl() {
+  if (window.location.pathname.includes('/frontend/app/')) {
+    return '../index.html';
+  }
+
+  return '/index.html';
+}
+
+if (!authFreePages.includes(page) && !user) {
+  window.location.href = appUrl('login.html');
+}
+
 const PostBloom = {
   team: [
     { id: 'm1', name: 'Avery Khan', email: 'avery@postbloom.co', role: 'Owner', initials: 'AK', active: 4 },
@@ -274,7 +298,7 @@ function scoreBadge(score) {
 const currentDemoUser = {
   name: 'You',
   initials: 'YO',
-  role: 'Manager'
+  role: user ? user.role : 'Manager'
 };
 
 function escapeHtml(value) {
@@ -284,6 +308,15 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function initialsForName(name) {
+  return String(name)
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join('');
 }
 
 function avatarTone(name) {
@@ -350,6 +383,16 @@ function initShell() {
   const overlay = document.querySelector('.mobile-overlay');
 
   if (avatarButton && dropdown) {
+    if (user) {
+      avatarButton.textContent = initialsForName(user.name);
+      dropdown.insertAdjacentHTML('afterbegin', `
+        <div class="user-menu-summary">
+          <strong>${escapeHtml(user.name)}</strong>
+          <span>${escapeHtml(user.role)}</span>
+        </div>
+      `);
+    }
+
     avatarButton.addEventListener('click', () => dropdown.classList.toggle('is-open'));
     document.addEventListener('click', (event) => {
       if (!event.target.closest('.avatar-menu')) dropdown.classList.remove('is-open');
@@ -364,6 +407,15 @@ function initShell() {
     sidebarToggle.addEventListener('click', toggleSidebar);
     overlay.addEventListener('click', toggleSidebar);
   }
+
+  document.querySelectorAll('[data-logout], .dropdown-menu a').forEach((link) => {
+    if (link.textContent.trim() !== 'Logout') return;
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      localStorage.removeItem('postbloom_user');
+      window.location.href = appUrl('login.html');
+    });
+  });
 }
 
 function renderDashboard() {
@@ -743,12 +795,151 @@ function renderTeam() {
   }
 }
 
+function setFieldError(field, message) {
+  const error = document.querySelector(`[data-error-for="${field.id}"]`);
+  if (error) error.textContent = message;
+  field.setAttribute('aria-invalid', message ? 'true' : 'false');
+}
+
+function initLogin() {
+  const form = document.getElementById('loginForm');
+  if (!form) return;
+
+  const credentials = {
+    'manager@postbloom.com': { password: 'demo1234', name: 'Maya Chen', role: 'Manager' },
+    'writer@postbloom.com': { password: 'demo1234', name: 'Jon Bell', role: 'Writer' },
+    'designer@postbloom.com': { password: 'demo1234', name: 'Priya Shah', role: 'Designer' },
+    'reviewer@postbloom.com': { password: 'demo1234', name: 'Leo Martin', role: 'Reviewer' }
+  };
+  const email = document.getElementById('loginEmail');
+  const password = document.getElementById('loginPassword');
+  const error = document.getElementById('loginError');
+  const button = document.getElementById('loginButton');
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    let isValid = true;
+    error.classList.remove('is-visible');
+
+    if (!email.value.trim()) {
+      setFieldError(email, 'Email is required');
+      isValid = false;
+    } else {
+      setFieldError(email, '');
+    }
+
+    if (!password.value.trim()) {
+      setFieldError(password, 'Password is required');
+      isValid = false;
+    } else {
+      setFieldError(password, '');
+    }
+
+    if (!isValid) return;
+
+    const record = credentials[email.value.trim().toLowerCase()];
+    if (!record || record.password !== password.value) {
+      error.classList.add('is-visible');
+      return;
+    }
+
+    button.disabled = true;
+    button.textContent = 'Signing in…';
+    localStorage.setItem('postbloom_user', JSON.stringify({
+      name: record.name,
+      email: email.value.trim().toLowerCase(),
+      role: record.role
+    }));
+
+    setTimeout(() => {
+      window.location.href = landingUrl();
+    }, 800);
+  });
+}
+
+function passwordStrength(value) {
+  let score = 0;
+  if (value.length >= 8) score += 1;
+  if (/[A-Z]/.test(value) && /[a-z]/.test(value)) score += 1;
+  if (/\d/.test(value)) score += 1;
+  if (/[^A-Za-z0-9]/.test(value)) score += 1;
+  return score;
+}
+
+function initRegister() {
+  const form = document.getElementById('registerForm');
+  if (!form) return;
+
+  const name = document.getElementById('registerName');
+  const email = document.getElementById('registerEmail');
+  const password = document.getElementById('registerPassword');
+  const confirm = document.getElementById('confirmPassword');
+  const terms = document.getElementById('terms');
+  const success = document.getElementById('registerSuccess');
+  const strengthSegments = document.querySelectorAll('[data-strength-segment]');
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  password.addEventListener('input', () => {
+    const score = passwordStrength(password.value);
+    strengthSegments.forEach((segment, index) => {
+      segment.className = `strength-segment ${index < score ? `strength-${score}` : ''}`;
+    });
+  });
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    let isValid = true;
+    success.classList.remove('is-visible');
+
+    if (!name.value.trim()) {
+      setFieldError(name, 'Full name is required');
+      isValid = false;
+    } else {
+      setFieldError(name, '');
+    }
+
+    if (!email.value.trim() || !emailPattern.test(email.value.trim())) {
+      setFieldError(email, email.value.trim() ? 'Enter a valid email address' : 'Email is required');
+      isValid = false;
+    } else {
+      setFieldError(email, '');
+    }
+
+    if (password.value.length < 8 || !/\d/.test(password.value)) {
+      setFieldError(password, 'Password must be at least 8 characters and include a number');
+      isValid = false;
+    } else {
+      setFieldError(password, '');
+    }
+
+    if (confirm.value !== password.value) {
+      setFieldError(confirm, 'Passwords must match');
+      isValid = false;
+    } else {
+      setFieldError(confirm, '');
+    }
+
+    if (!terms.checked) {
+      setFieldError(terms, 'You must agree to the Terms of Service');
+      isValid = false;
+    } else {
+      setFieldError(terms, '');
+    }
+
+    if (!isValid) return;
+
+    success.classList.add('is-visible');
+    setTimeout(() => {
+      window.location.href = appUrl('login.html');
+    }, 1500);
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   initShell();
   initTabs();
 
-  const page = document.body.dataset.page;
   if (page === 'dashboard') renderDashboard();
   if (page === 'opportunities') renderOpportunities();
   if (page === 'campaign-detail') renderCampaignDetail();
@@ -756,4 +947,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (page === 'enrich') renderEnrich();
   if (page === 'campaign-new') initCampaignNew();
   if (page === 'team') renderTeam();
+  if (page === 'login') initLogin();
+  if (page === 'register') initRegister();
 });
