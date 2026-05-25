@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PostBloom Sign In</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="app-body" data-page="auth">
+  <main class="onboarding-shell auth-shell">
+    <header class="auth-topbar">
+      <a class="app-logo auth-logo" href="../index.html" aria-label="PostBloom home"></a>
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
+    </header>
+    <section class="auth-layout">
+      <div class="auth-copy">
+        <div class="auth-eyebrow">Creator analytics workspace</div>
+        <h1>Turn your strongest posts into campaigns.</h1>
+        <p>Sign in or create an account, then PostBloom will guide you through workspace setup and analytics import.</p>
+      </div>
+
+      <div class="form-card glass auth-card">
+        <div class="auth-card-heading">
+          <div>
+            <div class="page-kicker" id="authKicker">Welcome back</div>
+            <h2 id="authHeading">Access PostBloom</h2>
+            <p id="authModeText">Continue to your workspace and pick up your campaign workflow.</p>
+          </div>
+        </div>
+        <div class="segmented-control" role="tablist" aria-label="Authentication mode">
+          <button class="segment-button active" type="button" data-auth-mode="login">Login</button>
+          <button class="segment-button" type="button" data-auth-mode="register">Register</button>
+        </div>
+
+        <form class="form-grid" id="authForm">
+          <div class="field" data-register-only hidden>
+            <label for="displayName">Full name</label>
+            <input id="displayName" name="displayName" autocomplete="name" placeholder="Avery Khan">
+          </div>
+          <div class="field">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" required minlength="8" placeholder="Minimum 8 characters">
+          </div>
+          <div class="error-card" id="authError"></div>
+          <button class="btn btn-primary" type="submit" id="authSubmit">Login</button>
+        </form>
+        <p class="auth-footnote">After authentication, you will create a workspace before the guided tutorial starts.</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

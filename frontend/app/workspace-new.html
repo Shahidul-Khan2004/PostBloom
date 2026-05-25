@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create Workspace | PostBloom</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body class="app-body" data-page="workspace-new">
+  <main class="onboarding-shell auth-shell">
+    <a class="app-logo auth-logo" href="../index.html" aria-label="PostBloom home"></a>
+    <section class="auth-layout">
+      <div class="auth-copy">
+        <div class="page-kicker">Workspace setup</div>
+        <h1>Create a new workspace.</h1>
+        <p>This becomes the home for your analytics import, opportunity feed, campaigns, and creator team workflow. The tutorial starts next.</p>
+      </div>
+
+      <form class="form-card glass form-grid auth-card" id="workspaceForm">
+        <div class="field">
+          <label for="workspaceName">Workspace name</label>
+          <input id="workspaceName" name="name" required placeholder="Bloom Labs Creator Team">
+        </div>
+        <div class="error-card" id="workspaceError"></div>
+        <button class="btn btn-primary" type="submit">Create Workspace & Start Tutorial</button>
+      </form>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
