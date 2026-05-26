@@ -185,7 +185,11 @@ function readProfileImage(file) {
   });
 }
 
-async function apiRequest(path, { method = 'GET', body, token, headers = {} } = {}) {
+async function apiRequest(path, opts = {}) {
+  if (typeof PostBloomApi !== 'undefined') {
+    return PostBloomApi.request(path, opts);
+  }
+  const { method = 'GET', body, token, headers = {} } = opts;
   const res = await fetch(`${getApiBase()}${path}`, {
     method,
     headers: {
@@ -201,6 +205,282 @@ async function apiRequest(path, { method = 'GET', body, token, headers = {} } = 
     throw new Error(message);
   }
   return payload.data;
+}
+
+const PLATFORM_DEFAULT_ROLE = {
+  instagram_carousel: 'writer',
+  threads_thread: 'writer',
+  youtube_short: 'designer',
+  tiktok_reel: 'designer'
+};
+
+let cachedPlatforms = null;
+let bootstrapPromise = null;
+
+function getAccountRole(session = getSession()) {
+  return session.user?.accountRole || 'user';
+}
+
+function isOperatorRole(role) {
+  return role === 'user' || role === 'admin';
+}
+
+function isSpecialistRole(role) {
+  return role === 'writer' || role === 'designer' || role === 'reviewer';
+}
+
+function api(token) {
+  return typeof PostBloomApi !== 'undefined' ? PostBloomApi : null;
+}
+
+async function bootstrapSession({ redirectIfNoWorkspace = false } = {}) {
+  const session = getSession();
+  if (!session.token) return session;
+
+  const A = api(session.token);
+  if (!A) return session;
+
+  try {
+    const user = await A.auth.me(session.token);
+    saveSession({ user });
+  } catch {
+    /* keep cached user */
+  }
+
+  let workspaces = [];
+  try {
+    workspaces = await A.workspaces.list(session.token);
+  } catch {
+    workspaces = [];
+  }
+
+  const current = getSession();
+  let workspace = current.workspace;
+  const list = Array.isArray(workspaces) ? workspaces : [];
+
+  if (workspace?.publicUuid && isBackendWorkspaceId(workspace.publicUuid)) {
+    const found = list.find((w) => w.publicUuid === workspace.publicUuid);
+    if (found) workspace = { ...found, ...workspace };
+  } else if (list.length === 1) {
+    workspace = list[0];
+  } else if (list.length > 0 && !workspace?.publicUuid) {
+    workspace = list[0];
+  }
+
+  let setup = current.setup || {};
+  if (workspace?.publicUuid && isBackendWorkspaceId(workspace.publicUuid)) {
+    try {
+      const detail = await A.workspaces.get(session.token, workspace.publicUuid);
+      workspace = { ...workspace, ...detail, publicUuid: detail.publicUuid || workspace.publicUuid };
+      setup = detail.setup || setup;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  saveSession({ workspace, setup, workspaces: list });
+  if (redirectIfNoWorkspace && list.length === 0 && document.body.classList.contains('app-body')) {
+    const page = document.body.dataset.page;
+    if (page && !['auth', 'workspace-new', 'tutorial'].includes(page)) {
+      window.location.href = '/app/workspace-new';
+    }
+  }
+  return getSession();
+}
+
+function ensureBootstrap() {
+  if (!bootstrapPromise) {
+    bootstrapPromise = bootstrapSession().finally(() => {
+      bootstrapPromise = null;
+    });
+  }
+  return bootstrapPromise;
+}
+
+function sidebarLinksForRole(role, path) {
+  const active = (href) => (path === href || path.startsWith(`${href}/`) ? ' active' : '');
+  const p = path.split('?')[0];
+  const links = [];
+
+  if (isOperatorRole(role)) {
+    links.push({ href: '/app/dashboard', label: '📊 Dashboard', key: 'dashboard' });
+    links.push({ href: '/app/opportunities', label: '🔥 Opportunity Feed', key: 'opportunities' });
+    links.push({ href: '/app/campaign-new', label: '🗂️ Campaigns', key: 'campaign-new' });
+    links.push({ href: '/app/team', label: '👥 Team', key: 'team' });
+    links.push({ href: '/app/analyze', label: '⬆️ Import Analytics', key: 'analyze' });
+  }
+  if (isSpecialistRole(role)) {
+    links.push({ href: '/app/work', label: '✍️ My Work', key: 'work' });
+    links.push({ href: '/app/inbox', label: '📥 Staff Inbox', key: 'inbox' });
+  }
+  if (role === 'reviewer') {
+    links.push({ href: '/app/work?tab=review', label: '✅ Review Queue', key: 'review' });
+  }
+  if (role === 'admin') {
+    links.push({ href: '/app/admin', label: '⚙️ Admin', key: 'admin' });
+  }
+
+  return links.map((link) => {
+    const isActive = p === link.href || (link.key === 'review' && p === '/app/work' && path.includes('tab=review'));
+    return `<a class="sidebar-link${isActive ? ' active' : ''}" href="${link.href}">${link.label}</a>`;
+  }).join('');
+}
+
+function paintWorkspaceChrome() {
+  const session = getSession();
+  const name = session.workspace?.name || 'Select workspace';
+  document.querySelectorAll('.workspace-name').forEach((el) => {
+    el.textContent = name;
+  });
+
+  const picker = document.getElementById('workspacePicker');
+  const workspaces = session.workspaces || [];
+  if (picker && workspaces.length > 1) {
+    picker.innerHTML = workspaces.map((w) => (
+      `<option value="${escapeHtml(w.publicUuid)}"${w.publicUuid === session.workspace?.publicUuid ? ' selected' : ''}>${escapeHtml(w.name)}</option>`
+    )).join('');
+    picker.hidden = false;
+  } else if (picker) {
+    picker.hidden = true;
+  }
+
+  const path = window.location.pathname + window.location.search;
+  const role = getAccountRole(session);
+  document.querySelectorAll('.sidebar-nav').forEach((nav) => {
+    nav.innerHTML = sidebarLinksForRole(role, path);
+  });
+}
+
+async function refreshNotifications() {
+  const session = getSession();
+  const badge = document.querySelector('.notification-badge');
+  const A = api(session.token);
+  if (!session.token || !A) {
+    if (badge) badge.hidden = true;
+    return [];
+  }
+  try {
+    const items = await A.notifications.list(session.token, true);
+    const count = Array.isArray(items) ? items.length : 0;
+    if (badge) {
+      badge.textContent = String(count);
+      badge.hidden = count === 0;
+    }
+    return Array.isArray(items) ? items : [];
+  } catch {
+    if (badge) badge.hidden = true;
+    return [];
+  }
+}
+
+function notificationNavigate(payload) {
+  if (!payload || typeof payload !== 'object') return;
+  if (payload.deliverablePublicUuid) {
+    window.location.href = `/app/campaign-detail?id=${encodeURIComponent(payload.campaignPublicUuid || '')}&deliverable=${payload.deliverablePublicUuid}`;
+    return;
+  }
+  if (payload.campaignPublicUuid) {
+    window.location.href = `/app/campaign-detail?id=${encodeURIComponent(payload.campaignPublicUuid)}`;
+  }
+}
+
+function initNotifications() {
+  const buttons = document.querySelectorAll('[data-notifications-toggle]');
+  if (!buttons.length) return;
+
+  let panel = document.getElementById('notificationsPanel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'notificationsPanel';
+    panel.className = 'notifications-panel glass';
+    panel.hidden = true;
+    document.body.appendChild(panel);
+  }
+
+  async function openPanel() {
+    const session = getSession();
+    const A = api(session.token);
+    if (!A) return;
+    panel.hidden = false;
+    panel.innerHTML = '<p class="muted">Loading…</p>';
+    try {
+      const items = await A.notifications.list(session.token, false);
+      if (!items.length) {
+        panel.innerHTML = '<p class="muted">No notifications.</p>';
+        return;
+      }
+      panel.innerHTML = items.slice(0, 20).map((n) => `
+        <button type="button" class="notification-item" data-notification-id="${escapeHtml(n.publicUuid)}">
+          <strong>${escapeHtml(n.type)}</strong>
+          <span class="muted">${escapeHtml(new Date(n.createdAt).toLocaleString())}</span>
+        </button>
+      `).join('');
+      panel.querySelectorAll('[data-notification-id]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = btn.dataset.notificationId;
+          const item = items.find((n) => n.publicUuid === id);
+          try {
+            await A.notifications.markRead(session.token, id);
+          } catch { /* ignore */ }
+          await refreshNotifications();
+          panel.hidden = true;
+          notificationNavigate(item?.payload);
+        });
+      });
+    } catch (err) {
+      panel.innerHTML = `<p class="muted">${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  buttons.forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      panel.hidden = !panel.hidden;
+      if (!panel.hidden) openPanel();
+    });
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-notifications-toggle]') && !e.target.closest('#notificationsPanel')) {
+      panel.hidden = true;
+    }
+  });
+}
+
+function initLogout() {
+  document.querySelectorAll('[data-logout]').forEach((link) => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      localStorage.removeItem('postbloomSession');
+      localStorage.removeItem('postbloomImportDone');
+      window.location.href = '/app/auth';
+    });
+  });
+}
+
+function initWorkspacePicker() {
+  const picker = document.getElementById('workspacePicker');
+  if (!picker || picker.dataset.bound) return;
+  picker.dataset.bound = 'true';
+  picker.addEventListener('change', async () => {
+    const session = getSession();
+    const A = api(session.token);
+    const id = picker.value;
+    if (!A || !isBackendWorkspaceId(id)) return;
+    try {
+      const detail = await A.workspaces.get(session.token, id);
+      saveSession({
+        workspace: {
+          publicUuid: detail.publicUuid,
+          name: detail.name,
+          slug: detail.slug
+        },
+        setup: detail.setup || {}
+      });
+      window.location.reload();
+    } catch (err) {
+      alert(err.message);
+    }
+  });
 }
 
 function showInlineError(node, message) {
@@ -267,6 +547,24 @@ function initShell() {
   const overlay = document.querySelector('.mobile-overlay');
 
   updateShellProfile();
+  document.querySelectorAll('.app-nav-actions .icon-button').forEach((btn) => {
+    if (btn.getAttribute('aria-label') === 'Notifications' || btn.textContent.includes('🔔')) {
+      btn.setAttribute('data-notifications-toggle', '');
+    }
+  });
+  document.querySelectorAll('.dropdown-menu a[href="/"]').forEach((a) => {
+    if (a.textContent.trim().toLowerCase() === 'logout') a.setAttribute('data-logout', '');
+  });
+  initLogout();
+  initNotifications();
+  initWorkspacePicker();
+
+  if (document.body.classList.contains('app-body')) {
+    ensureBootstrap().then(() => {
+      paintWorkspaceChrome();
+      refreshNotifications();
+    });
+  }
 
   if (avatarButton && dropdown) {
     avatarButton.addEventListener('click', () => dropdown.classList.toggle('is-open'));
@@ -393,7 +691,18 @@ function initAuth() {
     try {
       const data = await apiRequest(`/api/v1/auth/${mode}`, { method: 'POST', body });
       saveSession({ token: data.token, user: data.user, workspace: null });
-      window.location.href = '/app/workspace-new';
+      try {
+        const me = await apiRequest('/api/v1/auth/me', { token: data.token });
+        saveSession({ user: me });
+      } catch { /* use register/login user */ }
+      const workspaces = await apiRequest('/api/v1/workspaces', { token: data.token }).catch(() => []);
+      if (Array.isArray(workspaces) && workspaces.length > 0) {
+        saveSession({ workspaces, workspace: workspaces[0] });
+        await bootstrapSession();
+        window.location.href = '/app/dashboard';
+      } else {
+        window.location.href = '/app/workspace-new';
+      }
     } catch (err) {
       showInlineError(error, `${err.message}. Make sure the backend is running at ${getApiBase()}.`);
     } finally {
@@ -985,22 +1294,72 @@ function initAnalyze() {
   });
 }
 
-function renderDashboard() {
+async function renderDashboard() {
   const metrics = document.getElementById('dashboardMetrics');
   const table = document.getElementById('campaignRows');
   const activity = document.getElementById('recentActivity');
   const empty = document.getElementById('dashboardEmpty');
+  const banner = document.getElementById('dashboardSetupBanner');
+  const healthEl = document.getElementById('apiHealthStatus');
+
+  await ensureBootstrap();
+  const session = getSession();
+  const A = api(session.token);
+  const workspaceId = session.workspace?.publicUuid;
+
+  if (healthEl && A) {
+    A.health().then((h) => {
+      healthEl.textContent = h?.status === 'ok' ? 'API connected' : 'API degraded';
+      healthEl.classList.add('is-visible');
+    }).catch(() => {
+      healthEl.textContent = 'API offline';
+      healthEl.classList.add('is-visible', 'is-error');
+    });
+  }
+
+  if (banner) {
+    const setup = session.setup || {};
+    if (session.token && isBackendWorkspaceId(workspaceId) && !setup.canCreateCampaign) {
+      banner.hidden = false;
+      banner.innerHTML = `
+        <p class="muted">Import LinkedIn analytics before creating campaigns.</p>
+        <a class="btn btn-primary btn-small" href="/app/analyze">Import Analytics</a>
+      `;
+    } else {
+      banner.hidden = true;
+    }
+  }
+
+  let campaigns = [];
+  let auditEvents = [];
+  let memberCount = 0;
+
+  if (session.token && A && isBackendWorkspaceId(workspaceId)) {
+    try {
+      [campaigns, auditEvents, memberCount] = await Promise.all([
+        A.campaigns.list(session.token, workspaceId),
+        A.campaigns.activity(session.token, workspaceId).catch(() => []),
+        A.workspaces.members(session.token, workspaceId).then((m) => (Array.isArray(m) ? m.length : 0)).catch(() => 0)
+      ]);
+    } catch {
+      campaigns = [];
+    }
+  }
+
+  PostBloom.campaigns = (campaigns || []).map((c) => ({
+    id: c.publicUuid,
+    name: c.name,
+    source: c.enrichmentTitle || 'LinkedIn source post',
+    status: c.statusCode,
+    created: c.createdAt ? formatPublishDate(c.createdAt) : '—'
+  }));
 
   if (metrics) {
-    const activeDeliverables = PostBloom.campaigns.flatMap((campaign) => campaign.deliverables)
-      .filter((item) => !['approved', 'ready_to_publish'].includes(item.status)).length;
-    const pendingApprovals = PostBloom.campaigns.flatMap((campaign) => campaign.deliverables)
-      .filter((item) => ['submitted_for_review', 'in_review'].includes(item.status)).length;
     metrics.innerHTML = [
       ['Total Campaigns', PostBloom.campaigns.length],
-      ['Active Deliverables', activeDeliverables],
-      ['Pending Approvals', pendingApprovals],
-      ['Team Members', PostBloom.team.length]
+      ['Workspace Members', memberCount],
+      ['Audit Events', (auditEvents || []).length],
+      ['Import Ready', session.setup?.canCreateCampaign ? 'Yes' : 'No']
     ].map(([label, value]) => `
       <article class="metric-panel glass">
         <div class="metric-label">${label}</div>
@@ -1012,25 +1371,23 @@ function renderDashboard() {
   if (table) {
     table.innerHTML = PostBloom.campaigns.map((campaign) => `
       <tr>
-        <td><strong>${campaign.name}</strong></td>
-        <td class="source-snippet">${campaign.source}</td>
+        <td><strong>${escapeHtml(campaign.name)}</strong></td>
+        <td class="source-snippet">${escapeHtml(campaign.source)}</td>
         <td>${statusBadge(campaign.status)}</td>
-        <td>${campaign.created}</td>
-        <td><a class="btn btn-secondary" href="/app/campaign-detail?id=${campaign.id}">Open</a></td>
+        <td>${escapeHtml(campaign.created)}</td>
+        <td><a class="btn btn-secondary" href="/app/campaign-detail?id=${encodeURIComponent(campaign.id)}">Open</a></td>
       </tr>
     `).join('');
   }
 
   if (activity) {
-    const items = PostBloom.campaigns.flatMap((campaign) => campaign.activity.slice(0, 2)
-      .map(([time, text]) => ({ time, text, campaign: campaign.name })))
-      .slice(0, 6);
+    const items = (auditEvents || []).slice(0, 8);
     activity.innerHTML = items.length ? items.map((item) => `
         <div class="activity-item">
           <span class="activity-dot"></span>
           <div>
-            <div class="activity-text">${item.text}</div>
-            <div class="activity-time">${item.time} · ${item.campaign}</div>
+            <div class="activity-text">${escapeHtml(item.action)} · ${escapeHtml(item.entityType || '')}</div>
+            <div class="activity-time">${escapeHtml(item.actorName || 'System')} · ${escapeHtml(formatPublishDate(item.createdAt))}</div>
           </div>
         </div>
       `).join('') : '<p class="muted">No workspace activity yet.</p>';
@@ -1304,6 +1661,8 @@ function mapApiDeliverableToUi(deliverable) {
       : 'Specialist needed';
 
   return {
+    publicUuid: deliverable.publicUuid,
+    platformCode: deliverable.platformCode,
     platform: deliverable.platformName || deliverable.platformCode,
     role,
     assignee,
@@ -1314,6 +1673,29 @@ function mapApiDeliverableToUi(deliverable) {
     versions: [],
     comments: []
   };
+}
+
+function mapApiCommentToUi(comment) {
+  return {
+    name: comment.authorName || 'User',
+    role: comment.authorRole || '',
+    initials: initialsFromName(comment.authorName || 'U'),
+    text: comment.body,
+    time: formatPublishDate(comment.createdAt)
+  };
+}
+
+async function loadPlatforms(token) {
+  if (cachedPlatforms) return cachedPlatforms;
+  const A = api(token);
+  if (!A) return [];
+  cachedPlatforms = await A.platforms.list(token);
+  return cachedPlatforms;
+}
+
+function platformFieldSchema(platformCode, platforms) {
+  const p = (platforms || []).find((x) => x.code === platformCode);
+  return p?.fieldSchema || [];
 }
 
 function mapApiCampaignDetail(api) {
@@ -1377,17 +1759,39 @@ function setCampaignDetailEmptyState({
   if (activity) activity.innerHTML = '<p class="muted">No campaign activity yet.</p>';
 }
 
-function paintCampaignDetailView(campaign) {
+async function loadCampaignActivity(campaignId) {
+  const session = getSession();
+  const A = api(session.token);
+  const workspaceId = session.workspace?.publicUuid;
+  if (!A || !isBackendWorkspaceId(workspaceId)) return [];
+  const events = await A.campaigns.activity(session.token, workspaceId, 'campaign').catch(() => []);
+  return (events || []).filter((e) => e.entityPublicUuid === campaignId).slice(0, 20);
+}
+
+async function paintCampaignDetailView(campaign) {
+  const session = getSession();
+  const A = api(session.token);
+  const role = getAccountRole(session);
+  const canManage = isOperatorRole(role);
+  const canReview = role === 'reviewer' || role === 'admin';
+  const canSubmit = ['writer', 'designer', 'admin'].includes(role);
+  const platforms = session.token ? await loadPlatforms(session.token) : [];
+
   const header = document.getElementById('campaignHeader');
-  const deliverables = document.getElementById('deliverablesList');
+  const deliverablesEl = document.getElementById('deliverablesList');
   const activity = document.getElementById('campaignActivity');
   const overview = document.getElementById('campaignOverview');
+  const exportPanel = document.getElementById('exportReadyList');
+
+  const statusOptions = ['active', 'in_review', 'partially_approved', 'ready_to_publish', 'completed', 'cancelled'];
 
   if (header) {
-    const newCampaignHref = campaign.opportunityUuid
-      ? `/app/campaign-new?opportunity=${encodeURIComponent(campaign.opportunityUuid)}`
-      : '/app/opportunities';
-    const newCampaignLabel = campaign.opportunityUuid ? 'Create another' : 'Opportunities';
+    const statusSelect = canManage ? `
+      <select id="campaignStatusSelect" class="status-select">
+        ${statusOptions.map((s) => `<option value="${s}"${s === campaign.status ? ' selected' : ''}>${statusLabels[s] || s}</option>`).join('')}
+      </select>
+      <button type="button" class="btn btn-secondary btn-small" id="campaignStatusSave">Update status</button>
+    ` : statusBadge(campaign.status);
 
     header.innerHTML = `
       <div class="campaign-title-row">
@@ -1397,11 +1801,56 @@ function paintCampaignDetailView(campaign) {
           <p>${escapeHtml(campaign.source)}</p>
         </div>
         <div class="action-row">
-          ${statusBadge(campaign.status)}
-          <a class="btn btn-secondary" href="${escapeHtml(newCampaignHref)}">${escapeHtml(newCampaignLabel)}</a>
+          ${statusSelect}
+          <a class="btn btn-secondary" href="/app/opportunities">Opportunities</a>
         </div>
       </div>
+      ${canManage && campaign.status === 'active' ? `
+        <form class="add-deliverable-form content-card glass" id="addDeliverableForm">
+          <h3>Add deliverable</h3>
+          <div class="form-grid-inline">
+            <select id="addDeliverablePlatform" required>
+              <option value="">Platform…</option>
+              ${(platforms || []).map((p) => `<option value="${escapeHtml(p.code)}">${escapeHtml(p.name)}</option>`).join('')}
+            </select>
+            <input id="addDeliverableTitle" placeholder="Title (optional)">
+            <button type="submit" class="btn btn-primary btn-small">Add</button>
+          </div>
+          <div class="error-card" id="addDeliverableError"></div>
+        </form>
+      ` : ''}
     `;
+
+    const statusBtn = document.getElementById('campaignStatusSave');
+    if (statusBtn && A) {
+      statusBtn.addEventListener('click', async () => {
+        const code = document.getElementById('campaignStatusSelect')?.value;
+        try {
+          await A.campaigns.updateStatus(session.token, campaign.id, { statusCode: code });
+          window.location.reload();
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+    }
+
+    const addForm = document.getElementById('addDeliverableForm');
+    if (addForm && A) {
+      addForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errEl = document.getElementById('addDeliverableError');
+        hideInlineError(errEl);
+        try {
+          await A.campaigns.addDeliverable(session.token, campaign.id, {
+            platformCode: document.getElementById('addDeliverablePlatform').value,
+            title: document.getElementById('addDeliverableTitle').value.trim() || undefined
+          });
+          window.location.reload();
+        } catch (err) {
+          showInlineError(errEl, err.message);
+        }
+      });
+    }
   }
 
   if (overview) {
@@ -1415,16 +1864,42 @@ function paintCampaignDetailView(campaign) {
     `;
   }
 
-  if (deliverables) {
+  if (exportPanel && A) {
+    try {
+      const ready = await A.campaigns.exportReady(session.token, campaign.id);
+      exportPanel.innerHTML = (ready || []).length ? (ready || []).map((row) => `
+        <article class="content-card glass">
+          <h3>${escapeHtml(row.title || row.platformCode)}</h3>
+          <p class="muted">${escapeHtml(row.platformCode)} · v${row.latestVersion || 1}</p>
+          <pre class="export-payload">${escapeHtml(JSON.stringify(row.payload || {}, null, 2))}</pre>
+        </article>
+      `).join('') : '<p class="muted">No export-ready deliverables yet.</p>';
+    } catch (err) {
+      exportPanel.innerHTML = `<p class="muted">${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  if (deliverablesEl) {
     if (!campaign.deliverables.length) {
-      deliverables.innerHTML = '<div class="empty-state glass"><h3>No deliverables yet</h3><p class="muted">Add platform deliverables from the campaign workflow.</p></div>';
+      deliverablesEl.innerHTML = '<div class="empty-state glass"><h3>No deliverables yet</h3></div>';
     } else {
-      deliverables.innerHTML = campaign.deliverables.map((item, index) => `
-      <article class="deliverable-card glass ${index === 0 ? 'is-expanded' : ''}">
+      deliverablesEl.innerHTML = campaign.deliverables.map((item, index) => {
+        const schema = platformFieldSchema(item.platformCode, platforms);
+        const fieldsHtml = schema.map((f) => `
+          <div class="field">
+            <label>${escapeHtml(f.label)}${f.required ? ' *' : ''}</label>
+            ${f.type === 'textarea'
+              ? `<textarea data-submit-field="${escapeHtml(f.key)}" rows="3"></textarea>`
+              : `<input data-submit-field="${escapeHtml(f.key)}" type="text">`}
+          </div>
+        `).join('');
+
+        return `
+      <article class="deliverable-card glass ${index === 0 ? 'is-expanded' : ''}" data-deliverable-id="${escapeHtml(item.publicUuid)}">
         <div class="deliverable-summary" data-expand-deliverable>
           <div>
             <h3>${escapeHtml(item.platform)}</h3>
-            <p class="muted">${escapeHtml(item.role)} · Last updated ${escapeHtml(item.updated)}</p>
+            <p class="muted">${escapeHtml(item.role)} · ${escapeHtml(item.updated)}</p>
           </div>
           <div class="assignee">
             <span class="avatar">${escapeHtml(item.initials)}</span>
@@ -1434,78 +1909,141 @@ function paintCampaignDetailView(campaign) {
         </div>
         <div class="deliverable-body">
           <p>${escapeHtml(item.brief)}</p>
-          <h4>Submitted Versions</h4>
-          <div class="version-list">
-            ${(item.versions.length ? item.versions : [['No versions yet', item.assignee, item.updated]]).map(([version, submitter, time]) => `
-              <div class="version-row"><strong>${escapeHtml(version)}</strong> · ${escapeHtml(submitter)} · <span class="muted">${escapeHtml(time)}</span> · <a href="#">View</a></div>
-            `).join('')}
-          </div>
-          <section class="comment-section" data-comment-section="${index}">
+          <div class="staff-requests-block" data-staff-list="${index}"><p class="muted">Loading staff requests…</p></div>
+          ${canManage ? `<button type="button" class="btn btn-secondary btn-small" data-request-staff="${index}">Request specialist</button>` : ''}
+          <section class="comment-section">
             <h4>Comments</h4>
-            <div class="comment-list" data-comment-list="${index}">
-              ${renderComments(item.comments)}
-            </div>
+            <div class="comment-list" data-comment-list="${index}">${renderComments(item.comments)}</div>
             <div class="comment-composer">
-              <textarea maxlength="500" rows="3" placeholder="Leave feedback or a note for the team…" data-comment-input="${index}"></textarea>
-              <div class="comment-composer-footer">
-                <span class="comment-count" data-comment-count="${index}">0 / 500</span>
-                <button class="btn btn-primary btn-small" type="button" data-post-comment="${index}" disabled>Post Comment</button>
-              </div>
+              <textarea maxlength="5000" rows="3" data-comment-input="${index}"></textarea>
+              <button class="btn btn-primary btn-small" type="button" data-post-comment="${index}" disabled>Post Comment</button>
             </div>
           </section>
-          <div class="action-row">
-            <button class="btn btn-secondary">Submit Draft</button>
-            <button class="btn btn-secondary">Request Revision</button>
-            <button class="btn btn-secondary">Approve</button>
-            <button class="btn btn-primary">Mark Ready to Publish</button>
-          </div>
+          ${canSubmit ? `
+            <div class="submit-panel content-card glass" data-submit-panel="${index}">
+              <h4>Submit version</h4>
+              ${role === 'designer' ? `
+                <div class="field"><label>External URL (HTTPS)</label><input type="url" data-external-url="${index}" placeholder="https://…"></div>
+              ` : `
+                ${fieldsHtml || '<p class="muted">No field schema for this platform.</p>'}
+              `}
+              <button type="button" class="btn btn-primary btn-small" data-submit-version="${index}">Submit</button>
+            </div>
+          ` : ''}
+          ${canReview ? `
+            <div class="action-row">
+              <button type="button" class="btn btn-secondary btn-small" data-review-action="${index}" data-action="request_revision">Request revision</button>
+              <button type="button" class="btn btn-primary btn-small" data-review-action="${index}" data-action="approve">Approve</button>
+            </div>
+          ` : ''}
         </div>
-      </article>
-    `).join('');
+      </article>`;
+      }).join('');
 
       document.querySelectorAll('[data-expand-deliverable]').forEach((button) => {
         button.addEventListener('click', () => button.closest('.deliverable-card').classList.toggle('is-expanded'));
       });
 
-      campaign.deliverables.forEach((item, index) => {
+      for (let index = 0; index < campaign.deliverables.length; index += 1) {
+        const item = campaign.deliverables[index];
+        if (A && item.publicUuid) {
+          try {
+            const comments = await A.deliverables.listComments(session.token, item.publicUuid);
+            item.comments = (comments || []).map(mapApiCommentToUi);
+            const list = document.querySelector(`[data-comment-list="${index}"]`);
+            if (list) list.innerHTML = renderComments(item.comments);
+
+            const staff = await A.deliverables.listStaffRequests(session.token, item.publicUuid);
+            const staffEl = document.querySelector(`[data-staff-list="${index}"]`);
+            if (staffEl) {
+              staffEl.innerHTML = (staff || []).length
+                ? (staff || []).map((r) => `<span class="pill-tag">${escapeHtml(r.roleCode)}: ${escapeHtml(r.status)}</span>`).join(' ')
+                : '<span class="muted">No staff requests</span>';
+            }
+          } catch { /* ignore */ }
+        }
+
         const input = document.querySelector(`[data-comment-input="${index}"]`);
-        const count = document.querySelector(`[data-comment-count="${index}"]`);
-        const button = document.querySelector(`[data-post-comment="${index}"]`);
-        const list = document.querySelector(`[data-comment-list="${index}"]`);
-
-        if (!input || !count || !button || !list) return;
-
-        input.addEventListener('input', () => {
-          const length = input.value.length;
-          count.textContent = `${length} / 500`;
-          button.disabled = input.value.trim().length === 0;
-        });
-
-        button.addEventListener('click', () => {
-          const text = input.value.trim();
-          if (!text) return;
-
-          item.comments.unshift({
-            ...currentDemoUser,
-            text,
-            time: 'Just now'
+        const postBtn = document.querySelector(`[data-post-comment="${index}"]`);
+        if (input && postBtn) {
+          input.addEventListener('input', () => { postBtn.disabled = !input.value.trim(); });
+          postBtn.addEventListener('click', async () => {
+            const text = input.value.trim();
+            if (!text || !A || !item.publicUuid) return;
+            try {
+              await A.deliverables.addComment(session.token, item.publicUuid, { body: text });
+              const comments = await A.deliverables.listComments(session.token, item.publicUuid);
+              item.comments = (comments || []).map(mapApiCommentToUi);
+              document.querySelector(`[data-comment-list="${index}"]`).innerHTML = renderComments(item.comments);
+              input.value = '';
+              postBtn.disabled = true;
+            } catch (err) {
+              alert(err.message);
+            }
           });
-          list.innerHTML = renderComments(item.comments);
-          input.value = '';
-          count.textContent = '0 / 500';
-          button.disabled = true;
+        }
+
+        const submitBtn = document.querySelector(`[data-submit-version="${index}"]`);
+        if (submitBtn && A) {
+          submitBtn.addEventListener('click', async () => {
+            const body = {};
+            if (role === 'designer') {
+              body.externalUrl = document.querySelector(`[data-external-url="${index}"]`)?.value?.trim();
+            } else {
+              const payload = {};
+              const panel = document.querySelector(`[data-submit-panel="${index}"]`);
+              panel?.querySelectorAll('[data-submit-field]').forEach((el) => {
+                payload[el.dataset.submitField] = el.value;
+              });
+              body.payload = payload;
+            }
+            try {
+              await A.deliverables.submitVersion(session.token, item.publicUuid, body);
+              window.location.reload();
+            } catch (err) {
+              alert(err.message);
+            }
+          });
+        }
+
+        document.querySelectorAll(`[data-review-action="${index}"]`).forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            if (!A) return;
+            try {
+              await A.deliverables.review(session.token, item.publicUuid, {
+                action: btn.dataset.action,
+                notes: ''
+              });
+              window.location.reload();
+            } catch (err) {
+              alert(err.message);
+            }
+          });
         });
-      });
+
+        const reqStaff = document.querySelector(`[data-request-staff="${index}"]`);
+        if (reqStaff && A) {
+          reqStaff.addEventListener('click', async () => {
+            try {
+              await A.deliverables.createStaffRequest(session.token, item.publicUuid, {});
+              window.location.reload();
+            } catch (err) {
+              alert(err.message);
+            }
+          });
+        }
+      }
     }
   }
 
   if (activity) {
-    activity.innerHTML = campaign.activity.map(([time, text]) => `
+    const events = await loadCampaignActivity(campaign.id);
+    activity.innerHTML = events.length ? events.map((item) => `
       <div class="activity-item">
         <span class="activity-dot"></span>
-        <div><div class="activity-text">${escapeHtml(text)}</div><div class="activity-time">${escapeHtml(time)}</div></div>
+        <div><div class="activity-text">${escapeHtml(item.action)}</div><div class="activity-time">${escapeHtml(formatPublishDate(item.createdAt))}</div></div>
       </div>
-    `).join('');
+    `).join('') : '<p class="muted">No campaign activity yet.</p>';
   }
 }
 
@@ -1524,30 +2062,22 @@ async function renderCampaignDetail() {
   }
 
   if (header) {
-    header.innerHTML = `
-      <div>
-        <div class="page-kicker">Campaign detail</div>
-        <h1>Loading campaign…</h1>
-        <p class="muted">Fetching deliverables and status from your workspace.</p>
-      </div>
-    `;
+    header.innerHTML = '<div><h1>Loading campaign…</h1><p class="muted">Fetching deliverables…</p></div>';
   }
 
+  await ensureBootstrap();
   const result = await loadCampaignDetailFromApi(campaignId);
   if (!result.ok) {
-    const message = result.reason === 'auth'
-      ? 'Sign in to view this campaign.'
-      : result.message || 'Could not load this campaign.';
     setCampaignDetailEmptyState({
       title: 'Campaign unavailable',
-      message,
+      message: result.reason === 'auth' ? 'Sign in to view this campaign.' : (result.message || 'Could not load.'),
       ctaHref: '/app/opportunities',
       ctaLabel: 'Back to opportunities'
     });
     return;
   }
 
-  paintCampaignDetailView(result.campaign);
+  await paintCampaignDetailView(result.campaign);
 }
 
 function initTabs() {
@@ -1579,18 +2109,25 @@ function initImport() {
 
   if (!dropzone || !input) return;
 
-  function showError() {
-    error.classList.add('is-visible');
-    fileSummary.classList.remove('is-visible');
-    summary.classList.remove('is-visible');
+  let currentFile = null;
+
+  function showErrorMsg(msg) {
+    if (error) {
+      error.textContent = msg;
+      error.classList.add('is-visible');
+    }
+    fileSummary?.classList.remove('is-visible');
+    summary?.classList.remove('is-visible');
   }
 
   function handleFile(file) {
+    currentFile = file;
     if (!file || !file.name.endsWith('.xlsx')) {
-      showError();
+      currentFile = null;
+      showErrorMsg('Upload a LinkedIn analytics .xlsx export.');
       return;
     }
-    error.classList.remove('is-visible');
+    error?.classList.remove('is-visible');
     fileName.textContent = file.name;
     fileSize.textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB`;
     fileSummary.classList.add('is-visible');
@@ -1608,10 +2145,36 @@ function initImport() {
     dropzone.classList.remove('is-dragover');
     handleFile(event.dataTransfer.files[0]);
   });
-  importButton.addEventListener('click', () => {
-    localStorage.setItem('postbloomImportDone', 'true');
-    summary.classList.add('is-visible');
-  });
+
+  if (importButton) {
+    importButton.addEventListener('click', async () => {
+      if (!currentFile) {
+        showErrorMsg('Choose an .xlsx file first.');
+        return;
+      }
+      await ensureBootstrap();
+      const session = getSession();
+      const A = api(session.token);
+      const workspaceId = session.workspace?.publicUuid;
+      if (!session.token || !A || !isBackendWorkspaceId(workspaceId)) {
+        window.location.href = '/app/analyze';
+        return;
+      }
+      importButton.disabled = true;
+      importButton.textContent = 'Importing…';
+      try {
+        await A.analytics.import(session.token, workspaceId, currentFile);
+        localStorage.setItem('postbloomImportDone', 'true');
+        summary?.classList.add('is-visible');
+        window.location.href = '/app/opportunities';
+      } catch (err) {
+        showErrorMsg(err.message);
+      } finally {
+        importButton.disabled = false;
+        importButton.textContent = 'Validate & Import';
+      }
+    });
+  }
 }
 
 function initEnrichForm(opportunityId) {
@@ -1655,8 +2218,24 @@ function initEnrichForm(opportunityId) {
   });
 }
 
+async function loadOpportunityById(opportunityId) {
+  const session = getSession();
+  const workspaceId = session.workspace?.publicUuid;
+  const A = api(session.token);
+  if (!session.token || !A || !isBackendWorkspaceId(workspaceId) || !opportunityId) {
+    return { ok: false, reason: 'auth' };
+  }
+  try {
+    const opp = await A.opportunities.get(session.token, workspaceId, opportunityId);
+    return { ok: true, item: mapApiOpportunityToFeedItem(opp) };
+  } catch (err) {
+    return { ok: false, reason: 'error', message: err.message };
+  }
+}
+
 async function renderEnrich() {
   const params = new URLSearchParams(window.location.search);
+  const opportunityId = params.get('opportunity');
   const metrics = document.getElementById('enrichMetrics');
   const titleInput = document.getElementById('enrichmentTitle');
   const excerptInput = document.getElementById('enrichmentExcerpt');
@@ -1666,9 +2245,17 @@ async function renderEnrich() {
     metrics.innerHTML = '<p class="muted">Loading opportunity…</p>';
   }
 
-  const loadResult = await loadOpportunitiesFromApi('score');
-  const item = PostBloom.opportunities.find((opportunity) => opportunity.id === params.get('opportunity'))
-    || PostBloom.opportunities[0];
+  await ensureBootstrap();
+  let loadResult = opportunityId
+    ? await loadOpportunityById(opportunityId)
+    : await loadOpportunitiesFromApi('score').then((r) => ({
+      ok: r.ok,
+      item: PostBloom.opportunities[0],
+      reason: r.reason,
+      message: r.message
+    }));
+
+  const item = loadResult.item;
 
   if (!loadResult.ok || !item) {
     const message = !loadResult.ok
@@ -1721,45 +2308,79 @@ async function renderEnrich() {
   initEnrichForm(item.id);
 }
 
-const campaignPlatformMeta = {
-  '📸 Instagram Carousel': { code: 'instagram_carousel', role: 'Writer' },
-  '🎬 YouTube Short': { code: 'youtube_short', role: 'Designer' },
-  '🎵 TikTok/Reel': { code: 'tiktok_reel', role: 'Designer' },
-  '🧵 Threads/X Thread': { code: 'threads_thread', role: 'Writer' }
-};
-
 function initCampaignNew() {
+  const platformContainer = document.getElementById('platformCheckboxes');
   const assignmentList = document.getElementById('assignmentList');
-  const checks = document.querySelectorAll('[data-platform-check]');
   const form = document.getElementById('campaignForm');
   const errorEl = document.getElementById('campaignFormError');
+  const gateBanner = document.getElementById('campaignSetupGate');
+
+  let platformList = [];
+
+  function getChecks() {
+    return document.querySelectorAll('[data-platform-check]');
+  }
 
   function drawAssignments() {
     if (!assignmentList) return;
-    const selected = [...checks].filter((check) => check.checked).map((check) => check.value);
+    const checks = getChecks();
+    const selected = [...checks].filter((c) => c.checked);
     if (!selected.length) {
       assignmentList.innerHTML = '<p class="muted">Select at least one target platform to request specialists.</p>';
       return;
     }
 
-    assignmentList.innerHTML = selected.map((platform) => {
-      const meta = campaignPlatformMeta[platform];
-      if (!meta) return '';
+    assignmentList.innerHTML = selected.map((check) => {
+      const code = check.value;
+      const name = check.dataset.platformName || code;
+      const role = PLATFORM_DEFAULT_ROLE[code] || 'writer';
+      const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
       return `
       <div class="assignment-row">
-        <strong>${escapeHtml(platform)}</strong>
+        <strong>${escapeHtml(name)}</strong>
         <label class="assignment-request">
-          <input type="checkbox" data-request-specialist data-platform-code="${escapeHtml(meta.code)}" checked>
-          Request ${escapeHtml(meta.role)} specialist
+          <input type="checkbox" data-request-specialist data-platform-code="${escapeHtml(code)}" checked>
+          Request ${escapeHtml(roleLabel)} specialist
         </label>
-        <span class="role-badge">${escapeHtml(meta.role)}</span>
+        <span class="role-badge">${escapeHtml(roleLabel)}</span>
       </div>
     `;
     }).join('');
   }
 
-  checks.forEach((check) => check.addEventListener('change', drawAssignments));
-  drawAssignments();
+  async function loadPlatformCheckboxes() {
+    const session = getSession();
+    const A = api(session.token);
+    if (!platformContainer || !A || !session.token) return;
+
+    if (gateBanner) {
+      const setup = session.setup || {};
+      if (!setup.canCreateCampaign) {
+        gateBanner.hidden = false;
+        gateBanner.innerHTML = '<p class="muted">Import analytics before creating campaigns.</p><a class="btn btn-primary btn-small" href="/app/analyze">Import</a>';
+        form?.querySelector('button[type="submit"]')?.setAttribute('disabled', 'true');
+      } else {
+        gateBanner.hidden = true;
+        form?.querySelector('button[type="submit"]')?.removeAttribute('disabled');
+      }
+    }
+
+    try {
+      platformList = await loadPlatforms(session.token);
+      platformContainer.innerHTML = (platformList || []).map((p) => `
+        <label class="platform-check">
+          <input type="checkbox" data-platform-check value="${escapeHtml(p.code)}" data-platform-name="${escapeHtml(p.name)}">
+          <span>${escapeHtml(p.name)}</span>
+        </label>
+      `).join('');
+      getChecks().forEach((check) => check.addEventListener('change', drawAssignments));
+      drawAssignments();
+    } catch (err) {
+      platformContainer.innerHTML = `<p class="muted">${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  ensureBootstrap().then(loadPlatformCheckboxes);
 
   if (!form || form.dataset.bound === 'true') return;
   form.dataset.bound = 'true';
@@ -1772,9 +2393,9 @@ function initCampaignNew() {
     const workspaceId = session.workspace?.publicUuid;
     const opportunityUuid = new URLSearchParams(window.location.search).get('opportunity');
     const name = document.getElementById('campaignName')?.value?.trim();
-    const platformCodes = [...checks]
+    const platformCodes = [...getChecks()]
       .filter((check) => check.checked)
-      .map((check) => campaignPlatformMeta[check.value]?.code)
+      .map((check) => check.value)
       .filter(Boolean);
     const requestPlatformCodes = new Set(
       [...form.querySelectorAll('[data-request-specialist]:checked')]
@@ -1832,35 +2453,224 @@ function initCampaignNew() {
   });
 }
 
-function renderTeam() {
+async function renderTeam() {
   const grid = document.getElementById('teamGrid');
-  const modal = document.getElementById('inviteModal');
-  const open = document.getElementById('openInviteModal');
-  const close = document.querySelectorAll('[data-close-modal]');
+  const adminBlock = document.getElementById('adminTeamBlock');
+  const addForm = document.getElementById('adminAddMemberForm');
 
-  if (grid) {
-    grid.innerHTML = PostBloom.team.length ? PostBloom.team.map((member) => `
+  await ensureBootstrap();
+  const session = getSession();
+  const A = api(session.token);
+  const workspaceId = session.workspace?.publicUuid;
+
+  if (grid && session.token && A && isBackendWorkspaceId(workspaceId)) {
+    try {
+      const members = await A.workspaces.members(session.token, workspaceId);
+      PostBloom.team = (members || []).map((m) => ({
+        publicUuid: m.user?.publicUuid,
+        name: m.user?.displayName || 'Member',
+        email: m.user?.email || '',
+        role: m.accountRole || m.roleCode,
+        initials: initialsFromName(m.user?.displayName || 'M'),
+        active: '—'
+      }));
+      grid.innerHTML = PostBloom.team.length ? PostBloom.team.map((member) => `
       <article class="member-card glass">
         <div class="member-top">
-          <span class="avatar">${member.initials}</span>
+          <span class="avatar">${escapeHtml(member.initials)}</span>
           <div>
-            <h3>${member.name}</h3>
-            <p class="muted">${member.email}</p>
+            <h3>${escapeHtml(member.name)}</h3>
+            <p class="muted">${escapeHtml(member.email)}</p>
           </div>
         </div>
-        <span class="role-badge">${member.role}</span>
-        <div class="member-actions">
-          <span class="muted">${member.active} active deliverables</span>
-          <button class="btn btn-secondary">Remove</button>
-        </div>
+        <span class="role-badge">${escapeHtml(member.role)}</span>
       </article>
-    `).join('') : '<div class="empty-state glass"><h3>No team members yet</h3><p class="muted">Invite a teammate to start building your workspace team.</p></div>';
+    `).join('') : '<div class="empty-state glass"><h3>No members</h3></div>';
+    } catch (err) {
+      grid.innerHTML = `<p class="muted">${escapeHtml(err.message)}</p>`;
+    }
   }
 
-  if (modal && open) {
-    open.addEventListener('click', () => modal.classList.add('is-open'));
-    close.forEach((button) => button.addEventListener('click', () => modal.classList.remove('is-open')));
+  if (adminBlock && getAccountRole() === 'admin') {
+    adminBlock.hidden = false;
+    if (addForm && !addForm.dataset.bound) {
+      addForm.dataset.bound = 'true';
+      addForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const userId = document.getElementById('adminAddUserId')?.value?.trim();
+        const errEl = document.getElementById('adminAddError');
+        hideInlineError(errEl);
+        if (!userId || !A) return;
+        try {
+          await A.admin.addToWorkspace(session.token, userId, workspaceId);
+          await renderTeam();
+        } catch (err) {
+          showInlineError(errEl, err.message);
+        }
+      });
+    }
+  } else if (adminBlock) {
+    adminBlock.hidden = true;
   }
+}
+
+function mapMyWorkItem(row) {
+  return {
+    id: row.public_uuid || row.publicUuid,
+    title: row.title,
+    status: row.status_code || row.statusCode,
+    platform: row.platform_name || row.platformName,
+    campaignId: row.campaign_public_uuid || row.campaignPublicUuid,
+    campaignName: row.campaign_name || row.campaignName
+  };
+}
+
+async function renderWork() {
+  const list = document.getElementById('workList');
+  const tab = new URLSearchParams(window.location.search).get('tab') || 'my-work';
+  if (!list) return;
+
+  await ensureBootstrap();
+  const session = getSession();
+  const A = api(session.token);
+  const workspaceId = session.workspace?.publicUuid;
+  list.innerHTML = '<p class="muted">Loading…</p>';
+
+  if (!session.token || !A || !isBackendWorkspaceId(workspaceId)) {
+    list.innerHTML = '<p class="muted">Sign in with a workspace to view work.</p>';
+    return;
+  }
+
+  try {
+    const items = tab === 'review'
+      ? await A.campaigns.reviewQueue(session.token, workspaceId)
+      : await A.campaigns.myWork(session.token, workspaceId);
+    const mapped = (items || []).map(mapMyWorkItem);
+    list.innerHTML = mapped.length ? mapped.map((item) => `
+      <article class="content-card glass">
+        <h3>${escapeHtml(item.title)}</h3>
+        <p class="muted">${escapeHtml(item.platform)} · ${escapeHtml(item.campaignName)}</p>
+        ${statusBadge(item.status)}
+        <a class="btn btn-secondary btn-small" href="/app/campaign-detail?id=${encodeURIComponent(item.campaignId)}">Open campaign</a>
+      </article>
+    `).join('') : '<p class="muted">Nothing in this queue.</p>';
+  } catch (err) {
+    list.innerHTML = `<p class="muted">${escapeHtml(err.message)}</p>`;
+  }
+
+  document.querySelectorAll('[data-work-tab]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.workTab === tab);
+  });
+}
+
+async function renderInbox() {
+  const list = document.getElementById('inboxList');
+  if (!list) return;
+
+  await ensureBootstrap();
+  const session = getSession();
+  const A = api(session.token);
+  list.innerHTML = '<p class="muted">Loading…</p>';
+
+  if (!session.token || !A) {
+    list.innerHTML = '<p class="muted">Sign in as a specialist.</p>';
+    return;
+  }
+
+  try {
+    const items = await A.staffing.listInbox(session.token, 'pending');
+    list.innerHTML = (items || []).length ? (items || []).map((req) => `
+      <article class="content-card glass">
+        <h3>${escapeHtml(req.campaignName || 'Campaign')}</h3>
+        <p class="muted">${escapeHtml(req.roleCode)} · ${escapeHtml(req.deliverableTitle || 'Campaign scope')}</p>
+        <button type="button" class="btn btn-primary btn-small" data-accept-request="${escapeHtml(req.publicUuid)}">Accept</button>
+      </article>
+    `).join('') : '<p class="muted">No pending requests.</p>';
+
+    list.querySelectorAll('[data-accept-request]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await A.staffing.accept(session.token, btn.dataset.acceptRequest);
+          await renderInbox();
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+    });
+  } catch (err) {
+    list.innerHTML = `<p class="muted">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+async function renderAdmin() {
+  await ensureBootstrap();
+  const roleForm = document.getElementById('adminRoleForm');
+  const analyticsEl = document.getElementById('adminAnalytics');
+  const session = getSession();
+  const A = api(session.token);
+
+  if (getAccountRole() !== 'admin') {
+    if (analyticsEl) analyticsEl.innerHTML = '<p class="muted">Admin access required.</p>';
+    return;
+  }
+
+  if (roleForm && !roleForm.dataset.bound) {
+    roleForm.dataset.bound = 'true';
+    roleForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errEl = document.getElementById('adminRoleError');
+      hideInlineError(errEl);
+      try {
+        await A.admin.assignRole(session.token, document.getElementById('adminRoleUserId').value.trim(), {
+          roleCode: document.getElementById('adminRoleCode').value
+        });
+        alert('Role updated.');
+      } catch (err) {
+        showInlineError(errEl, err.message);
+      }
+    });
+  }
+
+  if (analyticsEl && A) {
+    try {
+      const roles = ['writer', 'designer', 'reviewer'];
+      const results = await Promise.all(roles.map((r) => A.admin.specialistAnalytics(session.token, r).catch(() => [])));
+      analyticsEl.innerHTML = roles.map((role, i) => {
+        const rows = results[i] || [];
+        return `<h3>${escapeHtml(role)}</h3>${rows.length ? rows.map((u) => `
+          <p>${escapeHtml(u.displayName)} — ${(u.completionRate * 100).toFixed(0)}% (${u.campaignsCompleted}/${u.campaignsParticipated})</p>
+        `).join('') : '<p class="muted">No data</p>'}`;
+      }).join('');
+    } catch (err) {
+      analyticsEl.innerHTML = `<p class="muted">${escapeHtml(err.message)}</p>`;
+    }
+  }
+}
+
+async function initWorkspaceList() {
+  const listEl = document.getElementById('existingWorkspaces');
+  const session = getSession();
+  const A = api(session.token);
+  if (!listEl || !session.token || !A) return;
+
+  try {
+    const workspaces = await A.workspaces.list(session.token);
+    if (!workspaces?.length) return;
+    listEl.innerHTML = `
+      <h3>Continue with an existing workspace</h3>
+      ${workspaces.map((w) => `
+        <button type="button" class="btn btn-secondary workspace-pick" data-workspace-id="${escapeHtml(w.publicUuid)}">${escapeHtml(w.name)}</button>
+      `).join('')}
+    `;
+    listEl.querySelectorAll('.workspace-pick').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const detail = await A.workspaces.get(session.token, btn.dataset.workspaceId);
+        saveSession({ workspace: detail, setup: detail.setup });
+        window.location.href = '/app/dashboard';
+      });
+    });
+    listEl.hidden = false;
+  } catch { /* ignore */ }
 }
 
 function initPostBloomApp() {
@@ -1872,15 +2682,21 @@ function initPostBloomApp() {
   const page = document.body.dataset.page || document.querySelector('[data-postbloom-page]')?.dataset.postbloomPage;
   if (page === 'auth') initAuth();
   if (page === 'tutorial') initTutorial();
-  if (page === 'workspace-new') initWorkspaceNew();
+  if (page === 'workspace-new') {
+    initWorkspaceNew();
+    void initWorkspaceList();
+  }
   if (page === 'analyze') initAnalyze();
-  if (page === 'dashboard') renderDashboard();
-  if (page === 'opportunities') renderOpportunities();
+  if (page === 'dashboard') void renderDashboard();
+  if (page === 'opportunities') void renderOpportunities();
   if (page === 'campaign-detail') void renderCampaignDetail();
   if (page === 'import') initImport();
   if (page === 'enrich') void renderEnrich();
   if (page === 'campaign-new') initCampaignNew();
-  if (page === 'team') renderTeam();
+  if (page === 'team') void renderTeam();
+  if (page === 'work') void renderWork();
+  if (page === 'inbox') void renderInbox();
+  if (page === 'admin') void renderAdmin();
   if (page === 'profile') initProfile();
 }
 
