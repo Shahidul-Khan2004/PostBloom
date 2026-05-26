@@ -2554,3 +2554,119 @@ body[data-page="opportunities"] .empty-state {
     font-size: 1rem;
   }
 }
+
+.notifications-panel {
+  position: fixed;
+  top: 88px;
+  right: 24px;
+  z-index: 120;
+  width: min(360px, calc(100vw - 32px));
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notification-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.setup-banner {
+  margin-bottom: 20px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.api-health {
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+}
+
+.api-health.is-error {
+  color: #f87171;
+}
+
+.import-history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+}
+
+.import-history-row {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 0;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.import-summary-detail {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.work-list {
+  display: grid;
+  gap: 16px;
+}
+
+.form-grid-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.status-select {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: inherit;
+}
+
+.export-payload {
+  font-size: 0.8rem;
+  overflow-x: auto;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  max-height: 240px;
+}
+
+.add-deliverable-form {
+  margin-top: 16px;
+  padding: 16px;
+}
+
+.submit-panel {
+  margin-top: 16px;
+  padding: 16px;
+}
+
+.workspace-pick {
+  margin: 8px 8px 0 0;
+}

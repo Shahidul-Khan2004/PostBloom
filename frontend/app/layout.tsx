@@ -21,6 +21,7 @@ export default function RootLayout({
         <Script id="postbloom-config" strategy="beforeInteractive">
           {`window.__POSTBLOOM_API_BASE__=${JSON.stringify(process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000')};`}
         </Script>
+        <Script src="/app/api.js" strategy="beforeInteractive" />
         <Script src="/app/app.js" strategy="afterInteractive" />
       </body>
     </html>

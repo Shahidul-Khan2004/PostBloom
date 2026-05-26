@@ -117,14 +117,14 @@ function AppChrome({ children }: { children: ReactNode }) {
             <span className="workspace-name">Bloom Labs Creator Team</span>
           </div>
           <div className="app-nav-actions">
-            <button className="icon-button" aria-label="Notifications">🔔<span className="notification-badge">6</span></button>
+            <button className="icon-button" aria-label="Notifications" data-notifications-toggle>🔔<span className="notification-badge" hidden>0</span></button>
             <button className="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
             <div className="avatar-menu">
               <button className="avatar-button" data-avatar-menu aria-label="Open user menu">AK</button>
               <div className="dropdown-menu">
                 <a href="/app/profile">Profile</a>
                 <a href="#">Settings</a>
-                <a href="/">Logout</a>
+                <a href="/" data-logout>Logout</a>
               </div>
             </div>
           </div>
@@ -134,13 +134,7 @@ function AppChrome({ children }: { children: ReactNode }) {
       <div className="app-shell">
         <div className="app-layout">
           <aside className="sidebar glass">
-            <div className="sidebar-nav">
-              <a className="sidebar-link" href="/app/dashboard">📊 Dashboard</a>
-              <a className="sidebar-link" href="/app/opportunities">🔥 Opportunity Feed</a>
-              <a className="sidebar-link" href="/app/campaign-new">🗂️ Campaigns</a>
-              <a className="sidebar-link" href="/app/team">👥 Team</a>
-              <a className="sidebar-link active" href="/app/analyze">⬆️ Import Analytics</a>
-            </div>
+            <div className="sidebar-nav" />
           </aside>
           <main className="app-main analyze-page">{children}</main>
         </div>
@@ -294,6 +288,111 @@ function Results({ data }: { data: ImportResponseData }) {
   );
 }
 
+type ImportListRow = {
+  public_uuid?: string;
+  publicUuid?: string;
+  original_filename?: string;
+  originalFilename?: string;
+  created_at?: string;
+  createdAt?: string;
+};
+
+type ImportSummary = {
+  publicUuid?: string;
+  originalFilename?: string;
+  dateRangeStart?: string;
+  dateRangeEnd?: string;
+  metricsCoverage?: ImportResponseData['metricsCoverage'];
+  warnings?: string[];
+  createdAt?: string;
+};
+
+function ImportHistory({
+  token,
+  workspaceId
+}: {
+  token: string;
+  workspaceId: string;
+}) {
+  const [imports, setImports] = useState<ImportListRow[]>([]);
+  const [selected, setSelected] = useState<ImportSummary | null>(null);
+  const [historyError, setHistoryError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/workspaces/${workspaceId}/analytics/imports`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(payload.error?.message || 'Could not load imports');
+        if (!cancelled) setImports(Array.isArray(payload.data) ? payload.data : []);
+      } catch (err) {
+        if (!cancelled) setHistoryError(getErrorMessage(err));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, workspaceId]);
+
+  async function loadSummary(importId: string) {
+    setHistoryError('');
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/v1/workspaces/${workspaceId}/analytics/imports/${importId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error?.message || 'Could not load import');
+      setSelected(payload.data as ImportSummary);
+    } catch (err) {
+      setHistoryError(getErrorMessage(err));
+    }
+  }
+
+  return (
+    <section className="analyze-results-section content-card glass">
+      <div className="card-header">
+        <h2>Import history</h2>
+      </div>
+      {historyError ? <p className="muted">{historyError}</p> : null}
+      {imports.length ? (
+        <ul className="import-history-list">
+          {imports.map((row) => {
+            const id = row.public_uuid || row.publicUuid || '';
+            const name = row.original_filename || row.originalFilename || 'Import';
+            const when = row.created_at || row.createdAt;
+            return (
+              <li key={id}>
+                <button type="button" className="import-history-row" onClick={() => loadSummary(id)}>
+                  <strong>{name}</strong>
+                  <span className="muted">{when ? new Date(when).toLocaleString() : ''}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="muted">No previous imports for this workspace.</p>
+      )}
+      {selected ? (
+        <div className="import-summary-detail">
+          <h3>{selected.originalFilename}</h3>
+          <p className="muted">
+            {selected.dateRangeStart} – {selected.dateRangeEnd}
+          </p>
+          <p>
+            Validated: {formatNumber(selected.metricsCoverage?.engagementValidatedPosts)} · Reach-only:{' '}
+            {formatNumber(selected.metricsCoverage?.reachOnlyPosts)}
+          </p>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export function AnalyzeImportPage() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -313,8 +412,21 @@ export function AnalyzeImportPage() {
   useEffect(() => {
     document.body.className = 'app-body';
     document.body.dataset.page = 'analyze-import';
-    setSession(getSession());
+    const s = getSession();
+    setSession(s);
     setHasLoadedSession(true);
+    if (s.token && typeof window !== 'undefined') {
+      fetch(`${API_BASE}/api/v1/auth/me`, { headers: { Authorization: `Bearer ${s.token}` } })
+        .then((r) => r.json())
+        .then((p) => {
+          if (p.data) {
+            const next = { ...getSession(), user: p.data };
+            localStorage.setItem('postbloomSession', JSON.stringify(next));
+            setSession(next);
+          }
+        })
+        .catch(() => {});
+    }
   }, []);
 
   const fileMeta = useMemo(() => {
@@ -458,6 +570,10 @@ export function AnalyzeImportPage() {
           </section>
 
           {result ? <Results data={result} /> : null}
+
+          {session?.token && isBackendWorkspaceId(workspaceId) ? (
+            <ImportHistory token={session.token} workspaceId={workspaceId!} />
+          ) : null}
         </>
       )}
     </AppChrome>
