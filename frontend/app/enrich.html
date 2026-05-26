@@ -60,25 +60,22 @@
             <div class="metrics-grid enrich-metrics" id="enrichMetrics"></div>
           </aside>
 
-          <form class="form-card glass" action="campaign-new.html">
+          <form class="form-card glass" id="enrichForm">
             <div class="form-grid">
               <div class="field">
-                <label for="postText">Post Text</label>
-                <textarea id="postText" name="postText" placeholder="Paste the LinkedIn post text"></textarea>
+                <label for="enrichmentTitle">Source title</label>
+                <input id="enrichmentTitle" name="title" type="text" required maxlength="500" placeholder="Short headline for this source post">
               </div>
               <div class="field">
-                <label for="postUrl">Post URL</label>
-                <input id="postUrl" name="postUrl" type="text" placeholder="https://www.linkedin.com/posts/...">
+                <label for="enrichmentExcerpt">Post text</label>
+                <textarea id="enrichmentExcerpt" name="excerpt" maxlength="5000" placeholder="Paste the LinkedIn post copy"></textarea>
               </div>
               <div class="field">
-                <label for="teamNotes">Notes for team</label>
-                <textarea id="teamNotes" name="teamNotes" placeholder="Add creative direction, constraints, or audience notes"></textarea>
+                <label for="enrichmentNotes">Notes for team</label>
+                <textarea id="enrichmentNotes" name="notes" maxlength="5000" placeholder="Creative direction, constraints, or audience notes"></textarea>
               </div>
-              <div class="field">
-                <label for="sourceFile">Upload source image/doc</label>
-                <input id="sourceFile" name="sourceFile" type="file">
-              </div>
-              <button class="btn btn-primary" type="submit">Save & Create Campaign →</button>
+              <div class="error-card" id="enrichFormError" role="alert"></div>
+              <button class="btn btn-primary" type="submit">Save &amp; Create Campaign →</button>
             </div>
           </form>
         </section>

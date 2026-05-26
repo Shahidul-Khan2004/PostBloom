@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PostBloom New Campaign</title>
+  <title>PostBloom</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -59,25 +59,27 @@
           <div class="form-grid">
             <div class="field">
               <label for="campaignName">Campaign Name</label>
-              <input id="campaignName" type="text" value="Creator Ops Expansion Sprint">
+              <input id="campaignName" type="text" value="">
             </div>
             <div class="field">
               <label for="campaignDescription">Campaign Description</label>
-              <textarea id="campaignDescription">Expand this LinkedIn source post into a cross-platform campaign for creator team operators.</textarea>
+              <textarea id="campaignDescription"></textarea>
             </div>
             <div>
               <div class="field-label">Target Platforms</div>
               <div class="checkbox-grid">
-                <label class="checkbox-tile"><input type="checkbox" data-platform-check value="📸 Instagram Carousel" checked> 📸 Instagram Carousel</label>
-                <label class="checkbox-tile"><input type="checkbox" data-platform-check value="🎬 YouTube Short" checked> 🎬 YouTube Short</label>
+                <label class="checkbox-tile"><input type="checkbox" data-platform-check value="📸 Instagram Carousel"> 📸 Instagram Carousel</label>
+                <label class="checkbox-tile"><input type="checkbox" data-platform-check value="🎬 YouTube Short"> 🎬 YouTube Short</label>
                 <label class="checkbox-tile"><input type="checkbox" data-platform-check value="🎵 TikTok/Reel"> 🎵 TikTok/Reel</label>
-                <label class="checkbox-tile"><input type="checkbox" data-platform-check value="🧵 Threads/X Thread" checked> 🧵 Threads/X Thread</label>
+                <label class="checkbox-tile"><input type="checkbox" data-platform-check value="🧵 Threads/X Thread"> 🧵 Threads/X Thread</label>
               </div>
             </div>
             <div>
-              <div class="field-label">Assignments</div>
+              <div class="field-label">Specialist requests</div>
+              <p class="muted assignment-hint">For each platform, broadcast a request to matching specialists on PostBloom.</p>
               <div class="assignment-list" id="assignmentList"></div>
             </div>
+            <div class="error-card" id="campaignFormError" role="alert"></div>
             <button class="btn btn-primary" type="submit">Create Campaign</button>
           </div>
         </form>
