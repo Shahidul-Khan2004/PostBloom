@@ -1,0 +1,13 @@
+import { LegacyPage } from '../../../components/LegacyPage';
+
+const html = "<main class=\"onboarding-shell auth-shell\">\n    <header class=\"auth-topbar\">\n      <a class=\"app-logo auth-logo\" href=\"/\" aria-label=\"PostBloom home\"></a>\n      <button class=\"theme-toggle\" id=\"themeToggle\" aria-label=\"Toggle theme\">🌙</button>\n    </header>\n    <section class=\"auth-layout\">\n      <div class=\"auth-copy\">\n        <div class=\"auth-eyebrow\">Creator analytics workspace</div>\n        <h1>Turn your strongest posts into campaigns.</h1>\n        <p>Sign in or create an account, then PostBloom will guide you through workspace setup and analytics import.</p>\n      </div>\n\n      <div class=\"form-card glass auth-card\">\n        <div class=\"auth-card-heading\">\n          <div>\n            <div class=\"page-kicker\" id=\"authKicker\">Welcome back</div>\n            <h2 id=\"authHeading\">Access PostBloom</h2>\n            <p id=\"authModeText\">Continue to your workspace and pick up your campaign workflow.</p>\n          </div>\n        </div>\n        <div class=\"segmented-control\" role=\"tablist\" aria-label=\"Authentication mode\">\n          <button class=\"segment-button active\" type=\"button\" data-auth-mode=\"login\">Login</button>\n          <button class=\"segment-button\" type=\"button\" data-auth-mode=\"register\">Register</button>\n        </div>\n\n        <form class=\"form-grid\" id=\"authForm\">\n          <div class=\"field\" data-register-only hidden>\n            <label for=\"displayName\">Full name</label>\n            <input id=\"displayName\" name=\"displayName\" autocomplete=\"name\" placeholder=\"Avery Khan\">\n          </div>\n          <div class=\"field\">\n            <label for=\"email\">Email</label>\n            <input id=\"email\" name=\"email\" type=\"email\" autocomplete=\"email\" required placeholder=\"you@example.com\">\n          </div>\n          <div class=\"field\">\n            <label for=\"password\">Password</label>\n            <input id=\"password\" name=\"password\" type=\"password\" autocomplete=\"current-password\" required minlength=\"8\" placeholder=\"Minimum 8 characters\">\n          </div>\n          <div class=\"error-card\" id=\"authError\"></div>\n          <button class=\"btn btn-primary\" type=\"submit\" id=\"authSubmit\">Login</button>\n        </form>\n        <p class=\"auth-footnote\">After authentication, you will create a workspace before the guided tutorial starts.</p>\n      </div>\n    </section>\n  </main>\n\n  ";
+
+export default function Page() {
+  return (
+    <LegacyPage
+      bodyClass="app-body"
+      page="auth"
+      html={html}
+    />
+  );
+}
