@@ -1843,15 +1843,36 @@ body[data-page="opportunities"] .empty-state {
   gap: 18px;
 }
 
+.assignment-hint {
+  margin: 0 0 14px;
+  font-size: 0.92rem;
+}
+
 .assignment-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) 120px;
+  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.4fr) 120px;
   gap: 18px;
   align-items: center;
   padding: 18px;
   border-radius: 18px;
   background: var(--metric-bg);
   border: 1px solid var(--metric-border);
+}
+
+.assignment-request {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  cursor: pointer;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.78));
+  font-size: 0.95rem;
+}
+
+.assignment-request input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent, #8b5cf6);
 }
 
 .campaign-header-card {

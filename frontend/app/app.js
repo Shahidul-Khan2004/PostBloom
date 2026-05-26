@@ -79,7 +79,15 @@ function renderComments(comments) {
   return comments.map(renderComment).join('');
 }
 
-const API_BASE = 'http://localhost:3000';
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function getApiBase() {
+  return (typeof window !== 'undefined' && window.__POSTBLOOM_API_BASE__) || 'http://localhost:3000';
+}
+
+function isBackendWorkspaceId(value) {
+  return Boolean(value && UUID_PATTERN.test(value));
+}
 
 function getSession() {
   try {
@@ -178,7 +186,7 @@ function readProfileImage(file) {
 }
 
 async function apiRequest(path, { method = 'GET', body, token, headers = {} } = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${getApiBase()}${path}`, {
     method,
     headers: {
       ...(body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
@@ -387,7 +395,7 @@ function initAuth() {
       saveSession({ token: data.token, user: data.user, workspace: null });
       window.location.href = '/app/workspace-new';
     } catch (err) {
-      showInlineError(error, `${err.message}. Make sure the backend is running at ${API_BASE}.`);
+      showInlineError(error, `${err.message}. Make sure the backend is running at ${getApiBase()}.`);
     } finally {
       submit.disabled = false;
       submit.textContent = mode === 'register' ? 'Create Account' : 'Login';
@@ -1033,33 +1041,207 @@ function renderDashboard() {
   }
 }
 
-function renderOpportunities() {
+function hostFromUrl(url) {
+  if (!url) return '';
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return 'linkedin.com';
+  }
+}
+
+function formatPublishDate(value) {
+  if (!value) return 'Unknown date';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function formatEngagementRate(rate) {
+  const value = Number(rate);
+  if (Number.isNaN(value)) return '0';
+  return (value <= 1 ? value * 100 : value).toFixed(1);
+}
+
+function mapApiOpportunityToFeedItem(opp) {
+  const snippet = opp.enrichmentExcerpt
+    || opp.recommendationLabel
+    || (opp.linkedinPostUrl ? `LinkedIn post · ${hostFromUrl(opp.linkedinPostUrl)}` : '')
+    || '[No text available — enrich to add source copy]';
+  const engagements = opp.engagements != null ? Number(opp.engagements) : 0;
+
+  return {
+    id: opp.publicUuid,
+    publicUuid: opp.publicUuid,
+    date: formatPublishDate(opp.publishDate),
+    snippet,
+    impressions: opp.impressions != null ? Number(opp.impressions) : 0,
+    reactions: engagements,
+    comments: 0,
+    reposts: 0,
+    engagementRate: opp.engagementRate != null ? Number(opp.engagementRate) : null,
+    score: opp.score != null ? Number(opp.score) : 0,
+    evidenceType: opp.evidenceType,
+    recommendationLabel: opp.recommendationLabel,
+    rankWithinEvidenceType: opp.rankWithinEvidenceType,
+    linkedinPostUrl: opp.linkedinPostUrl,
+    enrichmentTitle: opp.enrichmentTitle || '',
+    enrichmentExcerpt: opp.enrichmentExcerpt || '',
+    enrichmentNotes: opp.enrichmentNotes || ''
+  };
+}
+
+async function loadOpportunitiesFromApi(sort = 'score') {
+  const session = getSession();
+  const workspaceId = session.workspace?.publicUuid;
+
+  if (!session.token) {
+    return { ok: false, reason: 'auth' };
+  }
+  if (!isBackendWorkspaceId(workspaceId)) {
+    return { ok: false, reason: 'workspace' };
+  }
+
+  try {
+    const apiSort = sort === 'date' ? 'date' : 'score';
+    const data = await apiRequest(`/api/v1/workspaces/${workspaceId}/opportunities?sort=${apiSort}`, {
+      token: session.token
+    });
+    const items = Array.isArray(data) ? data.map(mapApiOpportunityToFeedItem) : [];
+    PostBloom.opportunities = items;
+    if (items.length > 0) {
+      localStorage.setItem('postbloomImportDone', 'true');
+    }
+    return { ok: true, items };
+  } catch (err) {
+    return { ok: false, reason: 'error', message: err.message };
+  }
+}
+
+function setOpportunitiesEmptyState({ title, message, ctaHref, ctaLabel }) {
+  const empty = document.getElementById('opportunitiesEmpty');
+  if (!empty) return;
+  const heading = empty.querySelector('h3');
+  const paragraph = empty.querySelector('.muted');
+  const button = empty.querySelector('.btn');
+  if (heading) heading.textContent = title;
+  if (paragraph) paragraph.textContent = message;
+  if (button) {
+    if (ctaHref) {
+      button.href = ctaHref;
+      button.textContent = ctaLabel || 'Continue';
+      button.hidden = false;
+    } else {
+      button.hidden = true;
+    }
+  }
+}
+
+function updateOpportunitySummary(items) {
+  const summary = document.querySelector('.opportunity-filter-summary');
+  if (!summary) return;
+  if (!items.length) {
+    summary.innerHTML = '<span>No scored posts</span><strong>Import analytics</strong>';
+    return;
+  }
+  const topScore = Math.max(...items.map((item) => item.score || 0));
+  summary.innerHTML = `<span>${items.length} scored posts</span><strong>Top score ${topScore}</strong>`;
+}
+
+async function renderOpportunities() {
   const grid = document.getElementById('opportunityGrid');
   const sort = document.getElementById('sortOpportunities');
   const empty = document.getElementById('opportunitiesEmpty');
-  const hasImport = localStorage.getItem('postbloomImportDone') === 'true';
+  const hasImportFlag = localStorage.getItem('postbloomImportDone') === 'true';
+
+  if (grid) {
+    grid.innerHTML = '<p class="muted opportunity-loading">Loading opportunities…</p>';
+  }
+  if (empty) empty.hidden = true;
+
+  const initialSort = sort?.value === 'recent' ? 'date' : 'score';
+  let loadResult = await loadOpportunitiesFromApi(initialSort);
 
   function orderedItems() {
     const items = [...PostBloom.opportunities];
     const mode = sort ? sort.value : 'score';
-    if (mode === 'recent') return items.reverse();
     if (mode === 'impressions') return items.sort((a, b) => b.impressions - a.impressions);
-    if (mode === 'engagement') return items.sort((a, b) => (b.reactions + b.comments + b.reposts) - (a.reactions + a.comments + a.reposts));
+    if (mode === 'engagement') {
+      return items.sort(
+        (a, b) => (b.reactions + b.comments + b.reposts) - (a.reactions + a.comments + a.reposts)
+      );
+    }
+    if (mode === 'recent') return [...items].reverse();
     return items.sort((a, b) => b.score - a.score);
   }
 
   function draw() {
     if (!grid) return;
-    if (!hasImport || !PostBloom.opportunities.length) {
+
+    if (!loadResult.ok) {
       grid.innerHTML = '';
       if (empty) empty.hidden = false;
+      if (loadResult.reason === 'auth') {
+        setOpportunitiesEmptyState({
+          title: 'Sign in required',
+          message: 'Sign in and select a workspace to load your opportunity feed from the backend.',
+          ctaHref: '/app/auth',
+          ctaLabel: 'Sign in'
+        });
+      } else if (loadResult.reason === 'workspace') {
+        setOpportunitiesEmptyState({
+          title: 'Backend workspace required',
+          message: 'Create or select a backend workspace before viewing scored opportunities.',
+          ctaHref: '/app/workspace-new',
+          ctaLabel: 'Workspace setup'
+        });
+      } else {
+        setOpportunitiesEmptyState({
+          title: 'Could not load opportunities',
+          message: `${loadResult.message}. Make sure the backend is running at ${getApiBase()}.`,
+          ctaHref: '/app/analyze',
+          ctaLabel: 'Import Analytics'
+        });
+      }
+      updateOpportunitySummary([]);
       return;
     }
+
+    if (!PostBloom.opportunities.length) {
+      grid.innerHTML = '';
+      if (empty) empty.hidden = false;
+      if (hasImportFlag) {
+        setOpportunitiesEmptyState({
+          title: 'No scored posts found',
+          message: 'Your import completed, but no scored opportunities are available for this workspace yet.',
+          ctaHref: '/app/analyze',
+          ctaLabel: 'Import Analytics'
+        });
+      } else {
+        setOpportunitiesEmptyState({
+          title: 'No analytics import yet',
+          message: 'Import your LinkedIn spreadsheet to generate scored content opportunities.',
+          ctaHref: '/app/analyze',
+          ctaLabel: 'Import Analytics'
+        });
+      }
+      updateOpportunitySummary([]);
+      return;
+    }
+
     if (empty) empty.hidden = true;
+    updateOpportunitySummary(PostBloom.opportunities);
+
     grid.innerHTML = orderedItems().map((item, index) => {
       const engagement = item.reactions + item.comments + item.reposts;
-      const engagementRate = ((engagement / item.impressions) * 100).toFixed(1);
-      const needsEnrichment = item.snippet.startsWith('[No text');
+      const engagementRate = item.engagementRate != null
+        ? formatEngagementRate(item.engagementRate)
+        : item.impressions > 0
+          ? ((engagement / item.impressions) * 100).toFixed(1)
+          : '0';
+      const needsEnrichment = !item.enrichmentTitle;
+      const title = item.recommendationLabel
+        || (needsEnrichment ? 'Enrichment-ready source post' : 'High performer for campaign expansion');
 
       return `
       <article class="opportunity-card glass ${index === 0 ? 'opportunity-card-featured' : ''}">
@@ -1072,13 +1254,13 @@ function renderOpportunities() {
           <span class="opportunity-date">${item.date}</span>
         </div>
         <div class="opportunity-title-row">
-          <h3>${needsEnrichment ? 'Enrichment-ready source post' : 'High performer for campaign expansion'}</h3>
+          <h3>${escapeHtml(title)}</h3>
           <span class="opportunity-status">${needsEnrichment ? 'Needs text' : 'Ready'}</span>
         </div>
         <div class="opportunity-stats">
           <div class="mini-stat"><span>Impressions</span><strong>${formatNumber(item.impressions)}</strong></div>
-          <div class="mini-stat"><span>Reactions</span><strong>${formatNumber(item.reactions)}</strong></div>
-          <div class="mini-stat"><span>Comments</span><strong>${formatNumber(item.comments)}</strong></div>
+          <div class="mini-stat"><span>Engagements</span><strong>${formatNumber(item.reactions)}</strong></div>
+          <div class="mini-stat"><span>Evidence</span><strong>${escapeHtml(item.evidenceType || '—')}</strong></div>
           <div class="mini-stat"><span>Eng. Rate</span><strong>${engagementRate}%</strong></div>
         </div>
         <p class="opportunity-snippet">${escapeHtml(item.snippet)}</p>
@@ -1091,45 +1273,132 @@ function renderOpportunities() {
     }).join('');
   }
 
-  if (sort) sort.addEventListener('change', draw);
+  if (sort) {
+    sort.addEventListener('change', async () => {
+      const mode = sort.value;
+      if (mode === 'recent' || mode === 'score') {
+        loadResult = await loadOpportunitiesFromApi(mode === 'recent' ? 'date' : 'score');
+      }
+      draw();
+    });
+  }
+
   draw();
 }
 
-function renderCampaignDetail() {
-  const params = new URLSearchParams(window.location.search);
-  const campaign = PostBloom.campaigns.find((item) => item.id === params.get('id')) || PostBloom.campaigns[0];
+function initialsFromName(name) {
+  return String(name)
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join('') || '?';
+}
+
+function mapApiDeliverableToUi(deliverable) {
+  const assignee = deliverable.assigneeName || deliverable.designerName || 'Awaiting specialist';
+  const role = deliverable.designerName
+    ? 'Designer'
+    : deliverable.assigneeName
+      ? 'Writer'
+      : 'Specialist needed';
+
+  return {
+    platform: deliverable.platformName || deliverable.platformCode,
+    role,
+    assignee,
+    initials: assignee === 'Awaiting specialist' ? 'AS' : initialsFromName(assignee),
+    status: deliverable.statusCode,
+    updated: deliverable.dueDate ? formatPublishDate(deliverable.dueDate) : 'Recently',
+    brief: deliverable.title || 'No brief yet.',
+    versions: [],
+    comments: []
+  };
+}
+
+function mapApiCampaignDetail(api) {
+  const createdLabel = api.createdAt ? formatPublishDate(api.createdAt) : 'Unknown';
+
+  return {
+    id: api.publicUuid,
+    opportunityUuid: api.opportunityUuid,
+    name: api.name,
+    source: api.enrichmentTitle || 'LinkedIn source post',
+    statusLabel: api.statusName || api.statusCode,
+    status: api.statusCode,
+    created: createdLabel,
+    deliverables: (api.deliverables || []).map(mapApiDeliverableToUi),
+    activity: [[`${createdLabel}`, `Campaign "${api.name}" created`]]
+  };
+}
+
+async function loadCampaignDetailFromApi(campaignId) {
+  const session = getSession();
+  if (!session.token) {
+    return { ok: false, reason: 'auth' };
+  }
+
+  try {
+    const data = await apiRequest(`/api/v1/campaigns/${campaignId}`, { token: session.token });
+    return { ok: true, campaign: mapApiCampaignDetail(data) };
+  } catch (err) {
+    return { ok: false, reason: 'error', message: err.message };
+  }
+}
+
+function setCampaignDetailEmptyState({
+  title,
+  message,
+  ctaHref,
+  ctaLabel
+}) {
+  const header = document.getElementById('campaignHeader');
+  const deliverables = document.getElementById('deliverablesList');
+  const activity = document.getElementById('campaignActivity');
+  const overview = document.getElementById('campaignOverview');
+  const cta = ctaHref
+    ? `<a class="btn btn-primary" href="${escapeHtml(ctaHref)}">${escapeHtml(ctaLabel || 'Continue')}</a>`
+    : '';
+
+  if (header) {
+    header.innerHTML = `
+      <div>
+        <div class="page-kicker">Campaign detail</div>
+        <h1>${escapeHtml(title)}</h1>
+        <p>${escapeHtml(message)}</p>
+        ${cta ? `<div class="action-row" style="margin-top: 16px;">${cta}</div>` : ''}
+      </div>
+    `;
+  }
+  if (overview) overview.innerHTML = '';
+  if (deliverables) {
+    deliverables.innerHTML = '<div class="empty-state glass"><h3>No deliverables</h3><p class="muted">Deliverables will appear once a campaign is loaded.</p></div>';
+  }
+  if (activity) activity.innerHTML = '<p class="muted">No campaign activity yet.</p>';
+}
+
+function paintCampaignDetailView(campaign) {
   const header = document.getElementById('campaignHeader');
   const deliverables = document.getElementById('deliverablesList');
   const activity = document.getElementById('campaignActivity');
   const overview = document.getElementById('campaignOverview');
 
-  if (!campaign) {
-    if (header) {
-      header.innerHTML = `
-        <div>
-          <div class="page-kicker">Campaign detail</div>
-          <h1>No campaign selected</h1>
-          <p>Create a campaign from imported LinkedIn opportunities to view deliverables here.</p>
-        </div>
-      `;
-    }
-    if (overview) overview.innerHTML = '';
-    if (deliverables) deliverables.innerHTML = '<div class="empty-state glass"><h3>No campaign data</h3><p class="muted">Campaign details will appear after a campaign exists.</p></div>';
-    if (activity) activity.innerHTML = '<p class="muted">No campaign activity yet.</p>';
-    return;
-  }
-
   if (header) {
+    const newCampaignHref = campaign.opportunityUuid
+      ? `/app/campaign-new?opportunity=${encodeURIComponent(campaign.opportunityUuid)}`
+      : '/app/opportunities';
+    const newCampaignLabel = campaign.opportunityUuid ? 'Create another' : 'Opportunities';
+
     header.innerHTML = `
       <div class="campaign-title-row">
         <div>
-          <div class="page-kicker">Opportunity score ${campaign.score}</div>
-          <h1>${campaign.name}</h1>
-          <p>${campaign.source}</p>
+          <div class="page-kicker">${escapeHtml(campaign.statusLabel)}</div>
+          <h1>${escapeHtml(campaign.name)}</h1>
+          <p>${escapeHtml(campaign.source)}</p>
         </div>
         <div class="action-row">
           ${statusBadge(campaign.status)}
-          <a class="btn btn-secondary" href="/app/campaign-new">Edit</a>
+          <a class="btn btn-secondary" href="${escapeHtml(newCampaignHref)}">${escapeHtml(newCampaignLabel)}</a>
         </div>
       </div>
     `;
@@ -1138,34 +1407,37 @@ function renderCampaignDetail() {
   if (overview) {
     overview.innerHTML = `
       <div class="metrics-grid">
-        <article class="metric-panel glass"><div class="metric-label">Source Score</div><div class="metric-value">${campaign.score}</div></article>
+        <article class="metric-panel glass"><div class="metric-label">Source</div><div class="metric-value">${escapeHtml(campaign.source)}</div></article>
         <article class="metric-panel glass"><div class="metric-label">Deliverables</div><div class="metric-value">${campaign.deliverables.length}</div></article>
-        <article class="metric-panel glass"><div class="metric-label">Created</div><div class="metric-value">${campaign.created.split(',')[0]}</div></article>
+        <article class="metric-panel glass"><div class="metric-label">Created</div><div class="metric-value">${escapeHtml(campaign.created)}</div></article>
         <article class="metric-panel glass"><div class="metric-label">Status</div><div>${statusBadge(campaign.status)}</div></article>
       </div>
     `;
   }
 
   if (deliverables) {
-    deliverables.innerHTML = campaign.deliverables.map((item, index) => `
+    if (!campaign.deliverables.length) {
+      deliverables.innerHTML = '<div class="empty-state glass"><h3>No deliverables yet</h3><p class="muted">Add platform deliverables from the campaign workflow.</p></div>';
+    } else {
+      deliverables.innerHTML = campaign.deliverables.map((item, index) => `
       <article class="deliverable-card glass ${index === 0 ? 'is-expanded' : ''}">
         <div class="deliverable-summary" data-expand-deliverable>
           <div>
-            <h3>${item.platform}</h3>
-            <p class="muted">${item.role} · Last updated ${item.updated}</p>
+            <h3>${escapeHtml(item.platform)}</h3>
+            <p class="muted">${escapeHtml(item.role)} · Last updated ${escapeHtml(item.updated)}</p>
           </div>
           <div class="assignee">
-            <span class="avatar">${item.initials}</span>
-            <strong>${item.assignee}</strong>
+            <span class="avatar">${escapeHtml(item.initials)}</span>
+            <strong>${escapeHtml(item.assignee)}</strong>
             ${statusBadge(item.status)}
           </div>
         </div>
         <div class="deliverable-body">
-          <p>${item.brief}</p>
+          <p>${escapeHtml(item.brief)}</p>
           <h4>Submitted Versions</h4>
           <div class="version-list">
             ${(item.versions.length ? item.versions : [['No versions yet', item.assignee, item.updated]]).map(([version, submitter, time]) => `
-              <div class="version-row"><strong>${version}</strong> · ${submitter} · <span class="muted">${time}</span> · <a href="#">View</a></div>
+              <div class="version-row"><strong>${escapeHtml(version)}</strong> · ${escapeHtml(submitter)} · <span class="muted">${escapeHtml(time)}</span> · <a href="#">View</a></div>
             `).join('')}
           </div>
           <section class="comment-section" data-comment-section="${index}">
@@ -1191,49 +1463,91 @@ function renderCampaignDetail() {
       </article>
     `).join('');
 
-    document.querySelectorAll('[data-expand-deliverable]').forEach((button) => {
-      button.addEventListener('click', () => button.closest('.deliverable-card').classList.toggle('is-expanded'));
-    });
-
-    campaign.deliverables.forEach((item, index) => {
-      const input = document.querySelector(`[data-comment-input="${index}"]`);
-      const count = document.querySelector(`[data-comment-count="${index}"]`);
-      const button = document.querySelector(`[data-post-comment="${index}"]`);
-      const list = document.querySelector(`[data-comment-list="${index}"]`);
-
-      if (!input || !count || !button || !list) return;
-
-      input.addEventListener('input', () => {
-        const length = input.value.length;
-        count.textContent = `${length} / 500`;
-        button.disabled = input.value.trim().length === 0;
+      document.querySelectorAll('[data-expand-deliverable]').forEach((button) => {
+        button.addEventListener('click', () => button.closest('.deliverable-card').classList.toggle('is-expanded'));
       });
 
-      button.addEventListener('click', () => {
-        const text = input.value.trim();
-        if (!text) return;
+      campaign.deliverables.forEach((item, index) => {
+        const input = document.querySelector(`[data-comment-input="${index}"]`);
+        const count = document.querySelector(`[data-comment-count="${index}"]`);
+        const button = document.querySelector(`[data-post-comment="${index}"]`);
+        const list = document.querySelector(`[data-comment-list="${index}"]`);
 
-        item.comments.unshift({
-          ...currentDemoUser,
-          text,
-          time: 'Just now'
+        if (!input || !count || !button || !list) return;
+
+        input.addEventListener('input', () => {
+          const length = input.value.length;
+          count.textContent = `${length} / 500`;
+          button.disabled = input.value.trim().length === 0;
         });
-        list.innerHTML = renderComments(item.comments);
-        input.value = '';
-        count.textContent = '0 / 500';
-        button.disabled = true;
+
+        button.addEventListener('click', () => {
+          const text = input.value.trim();
+          if (!text) return;
+
+          item.comments.unshift({
+            ...currentDemoUser,
+            text,
+            time: 'Just now'
+          });
+          list.innerHTML = renderComments(item.comments);
+          input.value = '';
+          count.textContent = '0 / 500';
+          button.disabled = true;
+        });
       });
-    });
+    }
   }
 
   if (activity) {
     activity.innerHTML = campaign.activity.map(([time, text]) => `
       <div class="activity-item">
         <span class="activity-dot"></span>
-        <div><div class="activity-text">${text}</div><div class="activity-time">${time}</div></div>
+        <div><div class="activity-text">${escapeHtml(text)}</div><div class="activity-time">${escapeHtml(time)}</div></div>
       </div>
     `).join('');
   }
+}
+
+async function renderCampaignDetail() {
+  const campaignId = new URLSearchParams(window.location.search).get('id');
+  const header = document.getElementById('campaignHeader');
+
+  if (!campaignId) {
+    setCampaignDetailEmptyState({
+      title: 'No campaign selected',
+      message: 'Open a campaign from your workflow or create one from an enriched opportunity.',
+      ctaHref: '/app/opportunities',
+      ctaLabel: 'Go to opportunities'
+    });
+    return;
+  }
+
+  if (header) {
+    header.innerHTML = `
+      <div>
+        <div class="page-kicker">Campaign detail</div>
+        <h1>Loading campaign…</h1>
+        <p class="muted">Fetching deliverables and status from your workspace.</p>
+      </div>
+    `;
+  }
+
+  const result = await loadCampaignDetailFromApi(campaignId);
+  if (!result.ok) {
+    const message = result.reason === 'auth'
+      ? 'Sign in to view this campaign.'
+      : result.message || 'Could not load this campaign.';
+    setCampaignDetailEmptyState({
+      title: 'Campaign unavailable',
+      message,
+      ctaHref: '/app/opportunities',
+      ctaLabel: 'Back to opportunities'
+    });
+    return;
+  }
+
+  paintCampaignDetailView(result.campaign);
 }
 
 function initTabs() {
@@ -1300,59 +1614,222 @@ function initImport() {
   });
 }
 
-function renderEnrich() {
+function initEnrichForm(opportunityId) {
+  const form = document.getElementById('enrichForm');
+  const errorEl = document.getElementById('enrichFormError');
+  if (!form || form.dataset.bound === 'true') return;
+  form.dataset.bound = 'true';
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    hideInlineError(errorEl);
+
+    const session = getSession();
+    const workspaceId = session.workspace?.publicUuid;
+    const title = document.getElementById('enrichmentTitle')?.value?.trim();
+    const excerpt = document.getElementById('enrichmentExcerpt')?.value?.trim() || undefined;
+    const notes = document.getElementById('enrichmentNotes')?.value?.trim() || undefined;
+
+    if (!title) {
+      showInlineError(errorEl, 'Source title is required.');
+      return;
+    }
+    if (!session.token || !isBackendWorkspaceId(workspaceId) || !opportunityId) {
+      showInlineError(errorEl, 'Sign in and select a workspace to save enrichment.');
+      return;
+    }
+
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (submitButton) submitButton.disabled = true;
+
+    try {
+      await apiRequest(
+        `/api/v1/workspaces/${workspaceId}/opportunities/${opportunityId}/enrich`,
+        { method: 'PATCH', token: session.token, body: { title, excerpt, notes } }
+      );
+      window.location.href = `/app/campaign-new?opportunity=${encodeURIComponent(opportunityId)}`;
+    } catch (err) {
+      showInlineError(errorEl, err.message);
+      if (submitButton) submitButton.disabled = false;
+    }
+  });
+}
+
+async function renderEnrich() {
   const params = new URLSearchParams(window.location.search);
-  const item = PostBloom.opportunities.find((opportunity) => opportunity.id === params.get('opportunity')) || PostBloom.opportunities[0];
   const metrics = document.getElementById('enrichMetrics');
-  const text = document.getElementById('postText');
+  const titleInput = document.getElementById('enrichmentTitle');
+  const excerptInput = document.getElementById('enrichmentExcerpt');
+  const notesInput = document.getElementById('enrichmentNotes');
+
+  if (metrics) {
+    metrics.innerHTML = '<p class="muted">Loading opportunity…</p>';
+  }
+
+  const loadResult = await loadOpportunitiesFromApi('score');
+  const item = PostBloom.opportunities.find((opportunity) => opportunity.id === params.get('opportunity'))
+    || PostBloom.opportunities[0];
+
+  if (!loadResult.ok || !item) {
+    const message = !loadResult.ok
+      ? (loadResult.reason === 'auth'
+        ? 'Sign in to load this opportunity.'
+        : loadResult.reason === 'workspace'
+          ? 'Select a backend workspace to load this opportunity.'
+          : loadResult.message)
+      : 'No opportunity found. Import analytics or pick a post from the feed.';
+
+    if (metrics) {
+      metrics.innerHTML = `
+        <div class="empty-state glass">
+          <h3>Opportunity unavailable</h3>
+          <p class="muted">${escapeHtml(message)}</p>
+          <a class="btn btn-primary" href="/app/opportunities">Back to Opportunity Feed</a>
+        </div>
+      `;
+    }
+    if (titleInput) titleInput.value = '';
+    if (excerptInput) excerptInput.value = '';
+    if (notesInput) notesInput.value = '';
+    return;
+  }
+
+  const linkedinLink = item.linkedinPostUrl
+    ? `<article class="metric-panel glass"><div class="metric-label">LinkedIn post</div><div class="metric-value"><a href="${escapeHtml(item.linkedinPostUrl)}" target="_blank" rel="noreferrer">View original</a></div></article>`
+    : '';
 
   if (metrics) {
     metrics.innerHTML = `
       <article class="metric-panel glass"><div class="metric-label">Opportunity Score</div><div class="metric-value">${item.score}</div></article>
       <article class="metric-panel glass"><div class="metric-label">Impressions</div><div class="metric-value">${formatNumber(item.impressions)}</div></article>
-      <article class="metric-panel glass"><div class="metric-label">Reactions</div><div class="metric-value">${formatNumber(item.reactions)}</div></article>
-      <article class="metric-panel glass"><div class="metric-label">Post Date</div><div class="metric-value">${item.date.split(',')[0]}</div></article>
+      <article class="metric-panel glass"><div class="metric-label">Engagements</div><div class="metric-value">${formatNumber(item.reactions)}</div></article>
+      <article class="metric-panel glass"><div class="metric-label">Post Date</div><div class="metric-value">${escapeHtml(item.date.split(',')[0])}</div></article>
+      ${linkedinLink}
     `;
   }
 
-  if (text && !item.snippet.startsWith('[')) text.value = item.snippet;
+  if (titleInput) {
+    titleInput.value = item.enrichmentTitle || item.recommendationLabel || '';
+  }
+  if (excerptInput) {
+    excerptInput.value = item.enrichmentExcerpt || (item.snippet.startsWith('[') ? '' : item.snippet);
+  }
+  if (notesInput) {
+    notesInput.value = item.enrichmentNotes || '';
+  }
+
+  initEnrichForm(item.id);
 }
+
+const campaignPlatformMeta = {
+  '📸 Instagram Carousel': { code: 'instagram_carousel', role: 'Writer' },
+  '🎬 YouTube Short': { code: 'youtube_short', role: 'Designer' },
+  '🎵 TikTok/Reel': { code: 'tiktok_reel', role: 'Designer' },
+  '🧵 Threads/X Thread': { code: 'threads_thread', role: 'Writer' }
+};
 
 function initCampaignNew() {
   const assignmentList = document.getElementById('assignmentList');
   const checks = document.querySelectorAll('[data-platform-check]');
   const form = document.getElementById('campaignForm');
-  const roleMap = {
-    '📸 Instagram Carousel': 'Designer',
-    '🎬 YouTube Short': 'Writer',
-    '🎵 TikTok/Reel': 'Writer',
-    '🧵 Threads/X Thread': 'Writer'
-  };
+  const errorEl = document.getElementById('campaignFormError');
 
   function drawAssignments() {
     if (!assignmentList) return;
     const selected = [...checks].filter((check) => check.checked).map((check) => check.value);
-    assignmentList.innerHTML = selected.map((platform) => `
+    if (!selected.length) {
+      assignmentList.innerHTML = '<p class="muted">Select at least one target platform to request specialists.</p>';
+      return;
+    }
+
+    assignmentList.innerHTML = selected.map((platform) => {
+      const meta = campaignPlatformMeta[platform];
+      if (!meta) return '';
+      return `
       <div class="assignment-row">
-        <strong>${platform}</strong>
-        <select aria-label="Assign ${platform}">
-          ${PostBloom.team.length
-            ? PostBloom.team.map((member) => `<option>${member.name}</option>`).join('')
-            : '<option>No team members yet</option>'}
-        </select>
-        <span class="role-badge">${roleMap[platform]}</span>
+        <strong>${escapeHtml(platform)}</strong>
+        <label class="assignment-request">
+          <input type="checkbox" data-request-specialist data-platform-code="${escapeHtml(meta.code)}" checked>
+          Request ${escapeHtml(meta.role)} specialist
+        </label>
+        <span class="role-badge">${escapeHtml(meta.role)}</span>
       </div>
-    `).join('');
+    `;
+    }).join('');
   }
 
   checks.forEach((check) => check.addEventListener('change', drawAssignments));
   drawAssignments();
-  if (form) {
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
-      window.location.href = '/app/campaign-detail';
-    });
-  }
+
+  if (!form || form.dataset.bound === 'true') return;
+  form.dataset.bound = 'true';
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    hideInlineError(errorEl);
+
+    const session = getSession();
+    const workspaceId = session.workspace?.publicUuid;
+    const opportunityUuid = new URLSearchParams(window.location.search).get('opportunity');
+    const name = document.getElementById('campaignName')?.value?.trim();
+    const platformCodes = [...checks]
+      .filter((check) => check.checked)
+      .map((check) => campaignPlatformMeta[check.value]?.code)
+      .filter(Boolean);
+    const requestPlatformCodes = new Set(
+      [...form.querySelectorAll('[data-request-specialist]:checked')]
+        .map((input) => input.dataset.platformCode)
+        .filter(Boolean)
+    );
+
+    if (!name) {
+      showInlineError(errorEl, 'Campaign name is required.');
+      return;
+    }
+    if (!platformCodes.length) {
+      showInlineError(errorEl, 'Select at least one target platform.');
+      return;
+    }
+    if (!session.token || !isBackendWorkspaceId(workspaceId)) {
+      showInlineError(errorEl, 'Sign in and select a workspace to create a campaign.');
+      return;
+    }
+    if (!opportunityUuid) {
+      showInlineError(errorEl, 'Open this page from an enriched opportunity to link the source post.');
+      return;
+    }
+
+    const submitButton = form.querySelector('button[type="submit"]');
+    if (submitButton) submitButton.disabled = true;
+
+    try {
+      const created = await apiRequest(`/api/v1/workspaces/${workspaceId}/campaigns`, {
+        method: 'POST',
+        token: session.token,
+        body: { opportunityUuid, name, platformCodes }
+      });
+
+      if (requestPlatformCodes.size > 0) {
+        const detail = await apiRequest(`/api/v1/campaigns/${created.publicUuid}`, {
+          token: session.token
+        });
+        const deliverables = Array.isArray(detail?.deliverables) ? detail.deliverables : [];
+        await Promise.all(
+          deliverables
+            .filter((deliverable) => requestPlatformCodes.has(deliverable.platformCode))
+            .map((deliverable) => apiRequest(
+              `/api/v1/deliverables/${deliverable.publicUuid}/staff-requests`,
+              { method: 'POST', token: session.token, body: {} }
+            ))
+        );
+      }
+
+      window.location.href = `/app/campaign-detail?id=${encodeURIComponent(created.publicUuid)}`;
+    } catch (err) {
+      showInlineError(errorEl, err.message);
+      if (submitButton) submitButton.disabled = false;
+    }
+  });
 }
 
 function renderTeam() {
@@ -1399,9 +1876,9 @@ function initPostBloomApp() {
   if (page === 'analyze') initAnalyze();
   if (page === 'dashboard') renderDashboard();
   if (page === 'opportunities') renderOpportunities();
-  if (page === 'campaign-detail') renderCampaignDetail();
+  if (page === 'campaign-detail') void renderCampaignDetail();
   if (page === 'import') initImport();
-  if (page === 'enrich') renderEnrich();
+  if (page === 'enrich') void renderEnrich();
   if (page === 'campaign-new') initCampaignNew();
   if (page === 'team') renderTeam();
   if (page === 'profile') initProfile();
